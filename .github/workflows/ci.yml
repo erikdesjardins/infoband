@@ -19,16 +19,18 @@ jobs:
       - run: cargo fmt --all -- --check
 
   clippy:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v3
       - run: rustup toolchain install stable --profile minimal
       - run: rustup component add clippy
 
-      - run: RUSTFLAGS="-D warnings" cargo clippy
+      - run: |
+          set RUSTFLAGS="-D warnings"
+          cargo clippy
 
   test:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v3
       - run: rustup toolchain install stable --profile minimal
