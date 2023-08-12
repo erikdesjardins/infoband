@@ -7,8 +7,22 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
+log4rs = { version = "1.0", features = ["file_appender"] }
+log = "0.4"
+windows = { version = "0.48", features = [
+    "implement",
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Security",
+    "Win32_System_Com",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Ole",
+    "Win32_System_Registry",
+    "Win32_System_SystemServices",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
 
 [profile.release]
-panic = "abort"
 lto = true
 codegen-units = 1
