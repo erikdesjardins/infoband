@@ -37,10 +37,10 @@ fn main() -> Result<(), Error> {
                     Box::new(ConsoleAppender::builder().target(Target::Stderr).build())
                 },
             ))
-            .build(Root::builder().appender("default").build(if verbose {
-                LevelFilter::Trace
-            } else {
-                LevelFilter::Debug
+            .build(Root::builder().appender("default").build(match verbose {
+                0 => LevelFilter::Info,
+                1 => LevelFilter::Debug,
+                _ => LevelFilter::Trace,
             }))
             .unwrap(),
     )

@@ -203,19 +203,23 @@ impl ProcHandler for InfoBand {
     ) -> Option<LRESULT> {
         match message {
             WM_PAINT => {
+                log::debug!("Starting repaint (WM_PAINT)");
                 self.paint_without_context(window);
                 None
             }
             WM_PRINTCLIENT => {
+                log::debug!("Starting repaint (WM_PRINTCLIENT)");
                 self.paint(window, HDC(wparam.0 as _));
                 None
             }
             WM_ERASEBKGND => {
+                log::debug!("Handling background erase (WM_ERASEBKGND)");
                 let res = if self.composition_enabled() { 1 } else { 0 };
                 // Bypass the default window proc
                 Some(LRESULT(res))
             }
             WM_DESTROY => {
+                log::debug!("Shutting down (WM_DESTROY)");
                 // SAFETY: no preconditions
                 unsafe { PostQuitMessage(0) };
                 None

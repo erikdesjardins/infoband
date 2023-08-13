@@ -3,9 +3,9 @@ use argh::FromArgs;
 /// Computer info "deskband".
 #[derive(FromArgs)]
 pub struct Options {
-    /// logging verbosity (-v verbose)
+    /// logging verbosity (-v debug -v -v trace)
     #[argh(switch, short = 'v')]
-    pub verbose: bool,
+    pub verbose: u8,
 
     /// whether to run in non-interactive mode
     ///
