@@ -4,7 +4,15 @@ use windows::Win32::UI::WindowsAndMessaging::{
     DefWindowProcW, GetWindowLongPtrW, SetWindowLongPtrW, GWLP_USERDATA, WM_NCCREATE, WM_NCDESTROY,
 };
 
-pub trait ProcHandler: Default + Sync {
+// This does not require Sync or Send. It appears that window procedures are very thread-local.
+// e.g. https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendmessage
+// > If the specified window was created by the calling thread, the window procedure is called immediately
+// > as a subroutine.
+// > If the specified window was created by a different thread, the system switches to that thread and
+// > calls the appropriate window procedure.
+// That function is of course only one way to send messages to a window,
+// but it's part of a general pattern (e.g. message loops are also thread local).
+pub trait ProcHandler: Default {
     /// Handle a window message.
     ///
     /// If this returns `None`, the message will be passed to `DefWindowProcW`.

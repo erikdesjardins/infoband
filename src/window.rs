@@ -3,7 +3,6 @@ use crate::ext::RectExt;
 use crate::metrics;
 use crate::module;
 use crate::proc::{window_proc, ProcHandler};
-use std::sync::atomic::{AtomicBool, Ordering};
 use windows::core::{Error, Result, HRESULT, HSTRING};
 use windows::w;
 use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, SIZE, WPARAM};
@@ -95,14 +94,10 @@ pub fn run_message_loop() -> Result<()> {
 
 #[derive(Default)]
 struct InfoBand {
-    composition_enabled: AtomicBool,
+    is_composition_enabled: bool,
 }
 
 impl InfoBand {
-    fn composition_enabled(&self) -> bool {
-        self.composition_enabled.load(Ordering::Relaxed)
-    }
-
     fn paint_without_context(&self, window: HWND) {
         let mut ps = PAINTSTRUCT::default();
         // SAFETY: ps pointer is valid
@@ -128,7 +123,7 @@ impl InfoBand {
 
         let mut size = SIZE::default();
 
-        if self.composition_enabled() {
+        if self.is_composition_enabled {
             let theme = unsafe { OpenThemeData(None, w!("BUTTON")) };
             if !theme.is_invalid() {
                 defer! {
@@ -214,7 +209,7 @@ impl ProcHandler for InfoBand {
             }
             WM_ERASEBKGND => {
                 log::debug!("Handling background erase (WM_ERASEBKGND)");
-                let res = if self.composition_enabled() { 1 } else { 0 };
+                let res = if self.is_composition_enabled { 1 } else { 0 };
                 // Bypass the default window proc
                 Some(LRESULT(res))
             }
