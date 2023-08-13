@@ -48,11 +48,11 @@ jobs:
       - run: cargo build --release
         env:
           RUSTFLAGS: -Ctarget-feature=+crt-static
-      - run: dir target/release/infoband.dll
+      - run: dir target/release/infoband.exe
 
       - uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: target/release/infoband.dll
+          files: target/release/infoband.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
