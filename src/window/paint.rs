@@ -9,7 +9,7 @@ use windows::w;
 use windows::Win32::Foundation::{COLORREF, ERROR_FILE_NOT_FOUND, HWND, POINT, RECT};
 use windows::Win32::Graphics::Gdi::{
     GetDC, GetMonitorInfoW, MonitorFromPoint, ReleaseDC, AC_SRC_ALPHA, AC_SRC_OVER, BLENDFUNCTION,
-    DT_NOCLIP, DT_SINGLELINE, HDC, MONITORINFO, MONITOR_DEFAULTTOPRIMARY, RGBQUAD,
+    DT_NOCLIP, DT_SINGLELINE, HDC, MONITORINFO, MONITOR_DEFAULTTOPRIMARY, RGBQUAD, DT_NOPREFIX,
 };
 use windows::Win32::UI::Controls::{
     BeginBufferedPaint, CloseThemeData, DrawThemeTextEx, EndBufferedPaint, GetBufferedPaintBits,
@@ -211,7 +211,7 @@ fn draw_text(
     // > DrawText is somewhat faster when DT_NOCLIP is used.
     // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-drawtext
     // (And we don't need clipping since we generate a rect that's the right size.)
-    let textflags = DT_SINGLELINE | DT_NOCLIP;
+    let textflags = DT_NOCLIP | DT_NOPREFIX | DT_SINGLELINE;
 
     // Get size of text
     let text_size =
