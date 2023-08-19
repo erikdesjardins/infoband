@@ -4,46 +4,39 @@ use crate::util::RectExt;
 use crate::window::state::InfoBand;
 use windows::core::{Error, Result};
 use windows::w;
-use windows::Win32::Foundation::{COLORREF, ERROR_FILE_NOT_FOUND, HWND, POINT, RECT, SIZE};
+use windows::Win32::Foundation::{COLORREF, ERROR_FILE_NOT_FOUND, HWND, POINT, RECT};
 use windows::Win32::Graphics::Gdi::{
-    FillRect, GetDC, GetTextExtentPointW, ReleaseDC, AC_SRC_ALPHA, AC_SRC_OVER, BLENDFUNCTION,
-    COLOR_INFOBK, DRAW_TEXT_FORMAT, HBRUSH, HDC,
+    FillRect, GetDC, ReleaseDC, AC_SRC_ALPHA, AC_SRC_OVER, BLENDFUNCTION, COLOR_INFOBK,
+    DRAW_TEXT_FORMAT, HBRUSH, HDC,
 };
 use windows::Win32::UI::Controls::{
-    BeginBufferedPaint, CloseThemeData, DrawThemeTextEx, EndBufferedPaint, OpenThemeData,
-    BPBF_TOPDOWNDIB, BPPF_NOCLIP, BP_PAINTPARAMS, DTTOPTS, DTT_COMPOSITED, DTT_TEXTCOLOR,
+    BeginBufferedPaint, CloseThemeData, DrawThemeTextEx, EndBufferedPaint, GetThemeTextExtent,
+    OpenThemeData, BPBF_TOPDOWNDIB, BPPF_NOCLIP, BP_PAINTPARAMS, DTTOPTS, DTT_COMPOSITED,
+    DTT_TEXTCOLOR, HTHEME,
 };
 use windows::Win32::UI::WindowsAndMessaging::{UpdateLayeredWindow, ULW_ALPHA};
 
 impl InfoBand {
-    pub fn paint_without_context(&self, window: HWND) {
+    /// Paint the window using the window's device context.
+    pub fn paint(&self, window: HWND) {
         let win_hdc = unsafe { GetDC(window) };
         defer! {
             _ = unsafe { ReleaseDC(window, win_hdc) };
         }
 
-        self.paint(window, win_hdc);
+        self.paint_to_context(window, win_hdc);
     }
 
-    pub fn paint(&self, window: HWND, win_hdc: HDC) {
+    /// Paint the window to the given context.
+    pub fn paint_to_context(&self, window: HWND, win_hdc: HDC) {
         if let Err(e) = self.paint_fallible(window, win_hdc) {
             log::error!("Paint failed: {}", e);
         }
     }
 
+    /// Toplevel paint method, responsible for dealing with paint buffering and updating the window,
+    /// but not with drawing any content.
     fn paint_fallible(&self, window: HWND, win_hdc: HDC) -> Result<()> {
-        let content_glass = w!("Test content glass");
-
-        let theme = unsafe { OpenThemeData(None, w!("BUTTON")) };
-        if theme.is_invalid() {
-            return Err(Error::from(ERROR_FILE_NOT_FOUND));
-        }
-        defer! {
-            if let Err(e) = unsafe { CloseThemeData(theme) } {
-                log::error!("CloseThemeData failed: {}", e);
-            }
-        }
-
         // Use buffered paint to draw into temporary mem HDC...
         let mut hdc = HDC::default();
         let buffered_paint = unsafe {
@@ -66,44 +59,8 @@ impl InfoBand {
             }
         }
 
-        if self.debug_paint.get() {
-            unsafe {
-                FillRect(
-                    hdc,
-                    &RECT::from_size(WINDOW_SIZE),
-                    HBRUSH((COLOR_INFOBK.0 + 1) as isize),
-                )
-            };
-        }
-
-        let mut text_size = SIZE::default();
-        unsafe { GetTextExtentPointW(hdc, content_glass.as_wide(), &mut text_size).ok()? };
-        let left = (WINDOW_SIZE.cx - text_size.cx) / 2;
-        let top = (WINDOW_SIZE.cy - text_size.cy) / 2;
-        let mut rc_text = RECT {
-            left,
-            top,
-            right: left + text_size.cx,
-            bottom: top + text_size.cy,
-        };
-
-        unsafe {
-            DrawThemeTextEx(
-                theme,
-                hdc,
-                0,
-                0,
-                content_glass.as_wide(),
-                DRAW_TEXT_FORMAT(0),
-                &mut rc_text,
-                Some(&DTTOPTS {
-                    dwSize: std::mem::size_of::<DTTOPTS>() as u32,
-                    dwFlags: DTT_COMPOSITED | DTT_TEXTCOLOR,
-                    crText: COLORREF(0xffff00),
-                    ..Default::default()
-                }),
-            )?
-        };
+        // ...draw the content...
+        self.draw_content(hdc)?;
 
         // ...and then write the temporary mem HDC to the window, with alpha blending.
         unsafe {
@@ -128,4 +85,76 @@ impl InfoBand {
 
         Ok(())
     }
+
+    /// Draw the window content to the given device context.
+    fn draw_content(&self, hdc: HDC) -> Result<()> {
+        let theme = unsafe { OpenThemeData(None, w!("BUTTON")) };
+        if theme.is_invalid() {
+            return Err(Error::from(ERROR_FILE_NOT_FOUND));
+        }
+        defer! {
+            if let Err(e) = unsafe { CloseThemeData(theme) } {
+                log::error!("CloseThemeData failed: {}", e);
+            }
+        }
+
+        if self.debug_paint.get() {
+            unsafe {
+                FillRect(
+                    hdc,
+                    &RECT::from_size(WINDOW_SIZE),
+                    HBRUSH((COLOR_INFOBK.0 + 1) as isize),
+                )
+            };
+        }
+
+        let top_right_corner_at = |x, y| move |r: RECT| r.with_right_edge_at(x).with_top_edge_at(y);
+
+        draw_text(
+            hdc,
+            theme,
+            unsafe { w!("Test content glass").as_wide() },
+            top_right_corner_at(WINDOW_SIZE.cx, WINDOW_SIZE.cy / 2),
+        )?;
+
+        Ok(())
+    }
+}
+
+fn draw_text(
+    hdc: HDC,
+    theme: HTHEME,
+    text: &[u16],
+    position: impl FnOnce(RECT) -> RECT,
+) -> Result<()> {
+    let partid = 0;
+    let stateid = 0;
+    let textflags = DRAW_TEXT_FORMAT(0);
+
+    // Get size of text
+    let text_size =
+        unsafe { GetThemeTextExtent(theme, hdc, partid, stateid, text, textflags, None)? };
+
+    // Move text into desired position
+    let mut output_rect = position(text_size);
+
+    unsafe {
+        DrawThemeTextEx(
+            theme,
+            hdc,
+            partid,
+            stateid,
+            text,
+            textflags,
+            &mut output_rect,
+            Some(&DTTOPTS {
+                dwSize: std::mem::size_of::<DTTOPTS>() as u32,
+                dwFlags: DTT_COMPOSITED | DTT_TEXTCOLOR,
+                crText: COLORREF(0xffff00),
+                ..Default::default()
+            }),
+        )?
+    };
+
+    Ok(())
 }
