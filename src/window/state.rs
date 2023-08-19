@@ -54,53 +54,53 @@ impl ProcHandler for InfoBand {
         wparam: WPARAM,
         lparam: LPARAM,
     ) -> Option<LRESULT> {
-        match message {
+        Some(match message {
             WM_PAINT => {
                 log::debug!("Starting repaint (WM_PAINT)");
                 self.paint(window);
-                Some(LRESULT(0))
+                LRESULT(0)
             }
             WM_PRINTCLIENT => {
                 log::debug!("Starting repaint (WM_PRINTCLIENT)");
                 self.paint_to_context(window, HDC(wparam.0 as _));
-                Some(LRESULT(0))
+                LRESULT(0)
             }
             WM_ERASEBKGND => {
                 log::debug!("Ignoring background erase (WM_ERASEBKGND)");
                 // Since we use compositing, we don't need to erase the background
-                Some(LRESULT(1))
+                LRESULT(1)
             }
             WM_DESTROY => {
                 log::debug!("Shutting down (WM_DESTROY)");
                 // SAFETY: no preconditions
                 unsafe { PostQuitMessage(0) };
-                None
+                LRESULT(0)
             }
             WM_USER => match wparam {
                 UM_ENABLE_DEBUG_PAINT => {
                     log::debug!("Enabling debug paint (UM_ENABLE_DEBUG_PAINT)");
                     self.debug_paint.set(true);
-                    Some(LRESULT(0))
+                    LRESULT(0)
                 }
                 UM_INITIAL_PAINT => {
                     log::debug!("Starting repaint (UM_INITIAL_PAINT)");
                     self.paint(window);
-                    Some(LRESULT(0))
+                    LRESULT(0)
                 }
                 _ => {
                     log::warn!("Unhandled user message (message=WM_USER, wparam/user_message=0x{:016x} lparam=0x{:016x})", wparam.0, lparam.0);
-                    None
+                    return None;
                 }
             },
             WM_TIMER => match wparam {
                 IDT_REDRAW_TIMER => {
                     log::debug!("Starting repaint (IDT_REDRAW_TIMER)");
                     self.paint(window);
-                    Some(LRESULT(0))
+                    LRESULT(0)
                 }
                 _ => {
                     log::warn!("Unhandled timer message (message=WM_TIMER, wparam/timer_id=0x{:016x} lparam=0x{:016x})", wparam.0, lparam.0);
-                    None
+                    return None;
                 }
             },
             _ => {
@@ -110,8 +110,8 @@ impl ProcHandler for InfoBand {
                     wparam.0,
                     lparam.0
                 );
-                None
+                return None;
             }
-        }
+        })
     }
 }
