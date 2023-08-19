@@ -1,22 +1,68 @@
-use crate::constants::WINDOW_SIZE;
+use crate::constants::{UNSCALED_OFFSET_FROM_RIGHT_EDGE, UNSCALED_WINDOW_WIDTH};
 use crate::defer;
-use crate::util::RectExt;
+use crate::util::{RectExt, ScaleBy};
 use crate::window::state::InfoBand;
-use std::ptr;
+use std::mem;
+use std::ptr::{self};
 use windows::core::{Error, Result};
 use windows::w;
 use windows::Win32::Foundation::{COLORREF, ERROR_FILE_NOT_FOUND, HWND, POINT, RECT};
 use windows::Win32::Graphics::Gdi::{
-    GetDC, ReleaseDC, AC_SRC_ALPHA, AC_SRC_OVER, BLENDFUNCTION, DRAW_TEXT_FORMAT, HDC, RGBQUAD,
+    GetDC, GetMonitorInfoW, MonitorFromPoint, ReleaseDC, AC_SRC_ALPHA, AC_SRC_OVER, BLENDFUNCTION,
+    DT_NOCLIP, DT_SINGLELINE, HDC, MONITORINFO, MONITOR_DEFAULTTOPRIMARY, RGBQUAD,
 };
 use windows::Win32::UI::Controls::{
     BeginBufferedPaint, CloseThemeData, DrawThemeTextEx, EndBufferedPaint, GetBufferedPaintBits,
-    GetThemeTextExtent, OpenThemeData, BPBF_TOPDOWNDIB, BPPF_NOCLIP, BP_PAINTPARAMS, DTTOPTS,
-    DTT_COMPOSITED, DTT_TEXTCOLOR, HTHEME,
+    GetThemeTextExtent, OpenThemeData, BPBF_COMPATIBLEBITMAP, BPBF_TOPDOWNDIB, BPPF_NOCLIP,
+    BP_PAINTPARAMS, DTTOPTS, DTT_COMPOSITED, DTT_TEXTCOLOR, HTHEME,
 };
 use windows::Win32::UI::WindowsAndMessaging::{UpdateLayeredWindow, ULW_ALPHA};
 
 impl InfoBand {
+    pub fn compute_size_and_position(&self) {
+        if let Err(e) = self.compute_size_and_position_fallible() {
+            log::error!("Update window position failed: {}", e);
+        }
+    }
+
+    pub fn compute_size_and_position_fallible(&self) -> Result<()> {
+        let dpi = self.dpi.get();
+
+        // Get primary monitor (which always includes the origin)
+        let monitor = unsafe { MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY) };
+
+        // Get size of primary monitor
+        let monitor_info = {
+            let mut monitor_info = MONITORINFO {
+                cbSize: mem::size_of::<MONITORINFO>() as u32,
+                ..Default::default()
+            };
+            // SAFETY: lpmi is valid pointer to MONITORINFO
+            unsafe { GetMonitorInfoW(monitor, &mut monitor_info).ok()? };
+            monitor_info
+        };
+
+        // Height is always the size of the taskbar
+        let top = monitor_info.rcWork.bottom;
+        let bottom = monitor_info.rcMonitor.bottom;
+        // Right : i32edge the specified distance from the right edge of the screen
+        let right = monitor_info.rcMonitor.right - UNSCALED_OFFSET_FROM_RIGHT_EDGE.scale_by(dpi);
+        // Left edge positioned at the specified width
+        let left = right - UNSCALED_WINDOW_WIDTH.scale_by(dpi);
+
+        let rc = RECT {
+            top,
+            bottom,
+            left,
+            right,
+        };
+
+        self.size.set(rc.size());
+        self.position.set(rc.top_left_corner());
+
+        Ok(())
+    }
+
     /// Paint the window using the window's device context.
     pub fn paint(&self, window: HWND) {
         let win_hdc = unsafe { GetDC(window) };
@@ -37,17 +83,26 @@ impl InfoBand {
     /// Toplevel paint method, responsible for dealing with paint buffering and updating the window,
     /// but not with drawing any content.
     fn paint_fallible(&self, window: HWND, win_hdc: HDC) -> Result<()> {
-        let rc = RECT::from_size(WINDOW_SIZE);
+        let size = self.size.get();
+        let position = self.position.get();
 
         // Use buffered paint to draw into temporary mem HDC...
         let mut hdc = HDC::default();
         let buffered_paint = unsafe {
             BeginBufferedPaint(
                 win_hdc,
-                &rc,
-                BPBF_TOPDOWNDIB,
+                &RECT::from_size(size),
+                if self.debug_paint.get() {
+                    // Required for us to manually write the background when debugging.
+                    // Always 8bpc.
+                    BPBF_TOPDOWNDIB
+                } else {
+                    // Recommended in hidpi applications.
+                    // Uses color depth of monitor.
+                    BPBF_COMPATIBLEBITMAP
+                },
                 Some(&BP_PAINTPARAMS {
-                    cbSize: std::mem::size_of::<BP_PAINTPARAMS>() as u32,
+                    cbSize: mem::size_of::<BP_PAINTPARAMS>() as u32,
                     dwFlags: BPPF_NOCLIP,
                     ..Default::default()
                 }),
@@ -71,8 +126,8 @@ impl InfoBand {
             assert!(!bits.is_null());
 
             let cx_row: usize = cx_row.try_into().unwrap();
-            let cx: usize = rc.width().try_into().unwrap();
-            let cy: usize = rc.height().try_into().unwrap();
+            let cx: usize = size.cx.try_into().unwrap();
+            let cy: usize = size.cy.try_into().unwrap();
             assert!(cx_row >= cx);
 
             for y in 0..cy {
@@ -99,8 +154,8 @@ impl InfoBand {
             UpdateLayeredWindow(
                 window,
                 None,
-                None,
-                Some(&WINDOW_SIZE),
+                Some(&position),
+                Some(&size),
                 hdc,
                 Some(&POINT { x: 0, y: 0 }),
                 None,
@@ -120,7 +175,9 @@ impl InfoBand {
 
     /// Draw the window content to the given device context.
     fn draw_content(&self, hdc: HDC) -> Result<()> {
-        let theme = unsafe { OpenThemeData(None, w!("BUTTON")) };
+        let size = self.size.get();
+
+        let theme = unsafe { OpenThemeData(None, w!("TASKBAR")) };
         if theme.is_invalid() {
             return Err(Error::from(ERROR_FILE_NOT_FOUND));
         }
@@ -136,7 +193,7 @@ impl InfoBand {
             hdc,
             theme,
             unsafe { w!("Test content glass").as_wide() },
-            top_right_corner_at(WINDOW_SIZE.cx, WINDOW_SIZE.cy / 2),
+            top_right_corner_at(size.cx, size.cy / 2),
         )?;
 
         Ok(())
@@ -151,7 +208,10 @@ fn draw_text(
 ) -> Result<()> {
     let partid = 0;
     let stateid = 0;
-    let textflags = DRAW_TEXT_FORMAT(0);
+    // > DrawText is somewhat faster when DT_NOCLIP is used.
+    // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-drawtext
+    // (And we don't need clipping since we generate a rect that's the right size.)
+    let textflags = DT_SINGLELINE | DT_NOCLIP;
 
     // Get size of text
     let text_size =
@@ -170,9 +230,9 @@ fn draw_text(
             textflags,
             &mut output_rect,
             Some(&DTTOPTS {
-                dwSize: std::mem::size_of::<DTTOPTS>() as u32,
+                dwSize: mem::size_of::<DTTOPTS>() as u32,
                 dwFlags: DTT_COMPOSITED | DTT_TEXTCOLOR,
-                crText: COLORREF(0xffff00),
+                crText: COLORREF(0xffffff),
                 ..Default::default()
             }),
         )?

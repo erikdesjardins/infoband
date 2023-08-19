@@ -1,5 +1,5 @@
 use crate::constants::{
-    IDT_REDRAW_TIMER, REDRAW_TIMER_MS, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_PAINT, WINDOW_SIZE,
+    IDT_REDRAW_TIMER, REDRAW_TIMER_MS, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_PAINT,
 };
 use crate::defer;
 use crate::module;
@@ -7,6 +7,9 @@ use crate::window::proc::window_proc;
 use windows::core::{Error, Result, HRESULT, HSTRING};
 use windows::w;
 use windows::Win32::Foundation::LPARAM;
+use windows::Win32::UI::HiDpi::{
+    SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
+};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DispatchMessageW, GetMessageW, KillTimer, LoadCursorW, PostMessageW,
     RegisterClassW, SetTimer, ShowWindow, CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, IDC_ARROW, MSG,
@@ -19,6 +22,16 @@ mod paint;
 mod proc;
 mod state;
 
+/// Make this process HiDPI aware.
+/// Must be called before any other windowing functions.
+pub fn make_process_dpi_aware() -> Result<()> {
+    // SAFETY: not unsafe...
+    unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2).ok()? };
+
+    Ok(())
+}
+
+/// Create the toplevel window, start timers for updating it, and pump the windows message loop.
 pub fn create_and_run_message_loop(debug_paint: bool) -> Result<()> {
     let instance = module::get_handle();
 
@@ -61,8 +74,8 @@ pub fn create_and_run_message_loop(debug_paint: bool) -> Result<()> {
                 style,
                 CW_USEDEFAULT,
                 CW_USEDEFAULT,
-                WINDOW_SIZE.cx,
-                WINDOW_SIZE.cy,
+                CW_USEDEFAULT,
+                CW_USEDEFAULT,
                 None,
                 None,
                 instance,

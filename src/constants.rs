@@ -1,7 +1,8 @@
-use windows::Win32::Foundation::{SIZE, WPARAM};
+use windows::Win32::Foundation::WPARAM;
 
 // Sizing and positioning
-pub const WINDOW_SIZE: SIZE = SIZE { cx: 200, cy: 200 };
+pub const UNSCALED_OFFSET_FROM_RIGHT_EDGE: i32 = 300;
+pub const UNSCALED_WINDOW_WIDTH: i32 = 200;
 
 // User messages
 pub const UM_ENABLE_DEBUG_PAINT: WPARAM = WPARAM(1);

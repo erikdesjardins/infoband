@@ -1,5 +1,6 @@
 use crate::window::messages;
 use std::ptr::NonNull;
+use windows::core::Result;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
     DefWindowProcW, GetWindowLongPtrW, SetWindowLongPtrW, GWLP_USERDATA, WM_NCCREATE, WM_NCDESTROY,
@@ -13,7 +14,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
 // > calls the appropriate window procedure.
 // That function is of course only one way to send messages to a window,
 // but it's part of a general pattern (e.g. message loops are also thread local).
-pub trait ProcHandler: Default {
+pub trait ProcHandler: Sized {
+    fn create(window: HWND) -> Result<Self>;
+
     /// Handle a window message.
     ///
     /// If this returns `None`, the message will be passed to `DefWindowProcW`.
@@ -30,7 +33,14 @@ pub unsafe extern "system" fn window_proc<H: ProcHandler>(
     let state = match message {
         // On create, set to default state
         WM_NCCREATE => {
-            let state = Box::<H>::default();
+            let state = match H::create(window) {
+                Ok(state) => Box::new(state),
+                Err(e) => {
+                    log::error!("Failed to create window state: {}", e);
+                    // SAFETY: propagates same safety requirements as caller
+                    return unsafe { DefWindowProcW(window, message, wparam, lparam) };
+                }
+            };
             // SAFETY: handle is valid as we created it
             unsafe { SetWindowLongPtrW(window, GWLP_USERDATA, Box::into_raw(state) as isize) };
             // SAFETY: propagates same safety requirements as caller

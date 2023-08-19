@@ -1,4 +1,4 @@
-#![allow(non_snake_case, unstable_name_collisions)]
+#![allow(non_snake_case, unstable_name_collisions, clippy::let_unit_value)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use log::LevelFilter;
@@ -50,6 +50,8 @@ fn main() -> Result<(), Error> {
             .unwrap(),
     )
     .unwrap();
+
+    window::make_process_dpi_aware()?;
 
     window::create_and_run_message_loop(debug_paint)?;
 
