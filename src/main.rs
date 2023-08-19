@@ -11,18 +11,18 @@ use windows::core::Error;
 
 mod defer;
 
-mod ext;
-mod metrics;
+mod constants;
 mod module;
 mod opt;
 mod proc;
+mod util;
 mod window;
 
 fn main() -> Result<(), Error> {
     let opt::Options {
         verbose,
         noninteractive,
-        bordered,
+        debug_paint,
     } = argh::from_env();
 
     log4rs::init_config(
@@ -46,7 +46,7 @@ fn main() -> Result<(), Error> {
     )
     .unwrap();
 
-    window::create_and_run_message_loop(bordered)?;
+    window::create_and_run_message_loop(debug_paint)?;
 
     Ok(())
 }

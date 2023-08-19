@@ -14,7 +14,7 @@ pub struct Options {
     #[argh(switch)]
     pub noninteractive: bool,
 
-    /// whether to add window borders; useful for debugging
+    /// whether to make the window more visible and interactible for debugging
     #[argh(switch)]
-    pub bordered: bool,
+    pub debug_paint: bool,
 }

@@ -2,7 +2,7 @@ use std::mem::ManuallyDrop;
 
 #[macro_export]
 macro_rules! defer {
-    ($f:stmt ;) => {
+    ($f:stmt $(;)?) => {
         let _x = $crate::defer::Defer(::std::mem::ManuallyDrop::new(
             #[allow(redundant_semicolons)]
             || {

@@ -1,28 +1,23 @@
+use crate::constants::{
+    IDT_REDRAW_TIMER, REDRAW_TIMER_MS, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_PAINT, WINDOW_SIZE,
+};
 use crate::defer;
-use crate::ext::RectExt;
-use crate::metrics;
 use crate::module;
-use crate::proc::{window_proc, ProcHandler};
+use crate::proc::window_proc;
 use windows::core::{Error, Result, HRESULT, HSTRING};
 use windows::w;
-use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, SIZE, WPARAM};
-use windows::Win32::Graphics::Gdi::{
-    BeginPaint, EndPaint, GetTextExtentPointW, SetBkColor, TextOutW, DRAW_TEXT_FORMAT, HDC,
-    PAINTSTRUCT,
-};
-use windows::Win32::UI::Controls::{
-    BeginBufferedPaint, CloseThemeData, DrawThemeParentBackground, DrawThemeTextEx,
-    EndBufferedPaint, OpenThemeData, BPBF_TOPDOWNDIB, DTTOPTS, DTT_COMPOSITED, DTT_GLOWSIZE,
-    DTT_TEXTCOLOR,
-};
+use windows::Win32::Foundation::LPARAM;
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DispatchMessageW, GetClientRect, GetMessageW, LoadCursorW, PostQuitMessage,
-    RegisterClassW, ShowWindow, CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, IDC_ARROW, MSG, SW_SHOW,
-    WINDOW_EX_STYLE, WM_DESTROY, WM_ERASEBKGND, WM_PAINT, WM_PRINTCLIENT, WNDCLASSW,
-    WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_OVERLAPPEDWINDOW,
+    CreateWindowExW, DispatchMessageW, GetMessageW, KillTimer, LoadCursorW, PostMessageW,
+    RegisterClassW, SetTimer, ShowWindow, CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, IDC_ARROW, MSG,
+    SW_SHOW, WM_USER, WNDCLASSW, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_EX_LAYERED,
+    WS_EX_TRANSPARENT, WS_POPUP,
 };
 
-pub fn create_and_run_message_loop(bordered: bool) -> Result<()> {
+mod paint;
+mod state;
+
+pub fn create_and_run_message_loop(debug_paint: bool) -> Result<()> {
     let instance = module::get_handle();
 
     // SAFETY: using predefined system cursor, so instance handle is unused; IDC_ARROW is guaranteed to exist
@@ -35,7 +30,7 @@ pub fn create_and_run_message_loop(bordered: bool) -> Result<()> {
         hCursor: cursor,
         hInstance: instance,
         lpszClassName: class,
-        lpfnWndProc: Some(window_proc::<InfoBand>),
+        lpfnWndProc: Some(window_proc::<state::InfoBand>),
         ..Default::default()
     };
 
@@ -43,32 +38,64 @@ pub fn create_and_run_message_loop(bordered: bool) -> Result<()> {
     let atom = unsafe { RegisterClassW(&wc) };
     assert!(atom != 0);
 
-    let mut style = WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
-    if bordered {
-        style |= WS_OVERLAPPEDWINDOW;
+    // Note that this window will be destroyed by the default handler for WM_CLOSE
+    let window = {
+        // Layered window allows transparency
+        // https://learn.microsoft.com/en-us/windows/win32/winmsg/window-features#layered-windows
+        let mut exstyle = WS_EX_LAYERED;
+        if !debug_paint {
+            // Transparent window allows clicks to pass through everywhere
+            // (Layered windows allow clicks to pass through in transparent areas only)
+            exstyle |= WS_EX_TRANSPARENT;
+        }
+
+        let style = WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
+
+        let window = unsafe {
+            CreateWindowExW(
+                exstyle,
+                class,
+                None,
+                style,
+                CW_USEDEFAULT,
+                CW_USEDEFAULT,
+                WINDOW_SIZE.cx,
+                WINDOW_SIZE.cy,
+                None,
+                None,
+                instance,
+                None,
+            )
+        };
+        if window.0 == 0 {
+            return Err(Error::from_win32());
+        }
+        window
+    };
+
+    // Enqueue a message to tell the window about debug settings
+    if debug_paint {
+        unsafe { PostMessageW(window, WM_USER, UM_ENABLE_DEBUG_PAINT, LPARAM(0)).ok()? };
     }
 
-    // Note that this window will be destroyed by the default handler for WM_CLOSE
-    let window = unsafe {
-        CreateWindowExW(
-            WINDOW_EX_STYLE::default(),
-            class,
-            None,
-            style,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            metrics::SIZE.x,
-            metrics::SIZE.y,
-            None,
-            None,
-            instance,
-            None,
-        )
+    // Enqueue a message for initial paint
+    unsafe { PostMessageW(window, WM_USER, UM_INITIAL_PAINT, LPARAM(0)).ok()? };
+
+    // Set up timer to redraw window periodically
+    if unsafe { SetTimer(window, IDT_REDRAW_TIMER.0, REDRAW_TIMER_MS, None) } == 0 {
+        return Err(Error::from_win32());
+    }
+    defer! {
+        if let Err(e) = unsafe { KillTimer(window, IDT_REDRAW_TIMER.0).ok() } {
+            log::error!("KillTimer failed: {}", e);
+        }
     };
 
     // Show window after setting it up
+    // (Note that layered windows still don't render until you call UpdateLayeredWindow)
     unsafe { ShowWindow(window, SW_SHOW) };
 
+    // Run message loop (will block)
     run_message_loop()?;
 
     Ok(())
@@ -89,145 +116,5 @@ pub fn run_message_loop() -> Result<()> {
         Ok(())
     } else {
         Err(Error::new(HRESULT(exit_code), HSTRING::new()))
-    }
-}
-
-#[derive(Default)]
-struct InfoBand {
-    is_composition_enabled: bool,
-}
-
-impl InfoBand {
-    fn paint_without_context(&self, window: HWND) {
-        let mut ps = PAINTSTRUCT::default();
-        // SAFETY: ps pointer is valid
-        let hdc = unsafe { BeginPaint(window, &mut ps) };
-        defer! {
-            _ = unsafe { EndPaint(window, &ps) };
-        }
-        self.paint(window, hdc);
-    }
-
-    fn paint(&self, window: HWND, hdc: HDC) {
-        if let Err(e) = self.paint_fallible(window, hdc) {
-            log::error!("Paint failed: {}", e);
-        }
-    }
-
-    fn paint_fallible(&self, window: HWND, hdc: HDC) -> Result<()> {
-        let content_glass = w!("Test content glass");
-        let content = w!("Test content");
-
-        let mut rc = RECT::default();
-        unsafe { GetClientRect(window, &mut rc) };
-
-        let mut size = SIZE::default();
-
-        if self.is_composition_enabled {
-            let theme = unsafe { OpenThemeData(None, w!("BUTTON")) };
-            if !theme.is_invalid() {
-                defer! {
-                    _ = unsafe { CloseThemeData(theme) };
-                }
-
-                let mut hdc_paint = HDC::default();
-                let buffered_paint =
-                    unsafe { BeginBufferedPaint(hdc, &rc, BPBF_TOPDOWNDIB, None, &mut hdc_paint) };
-                defer! {
-                    _ = unsafe { EndBufferedPaint(buffered_paint, true) };
-                }
-
-                unsafe { DrawThemeParentBackground(window, hdc_paint, Some(&rc))? };
-
-                unsafe { GetTextExtentPointW(hdc, content_glass.as_wide(), &mut size).ok()? };
-                let left = (rc.width() - size.cx) / 2;
-                let top = (rc.height() - size.cy) / 2;
-                let mut rc_text = RECT {
-                    left,
-                    top,
-                    right: left + size.cx,
-                    bottom: top + size.cy,
-                };
-
-                let dtt = DTTOPTS {
-                    dwSize: std::mem::size_of::<DTTOPTS>() as u32,
-                    dwFlags: DTT_COMPOSITED | DTT_TEXTCOLOR | DTT_GLOWSIZE,
-                    crText: COLORREF(0xffff00),
-                    iGlowSize: 10,
-                    ..Default::default()
-                };
-
-                unsafe {
-                    DrawThemeTextEx(
-                        theme,
-                        hdc_paint,
-                        0,
-                        0,
-                        content_glass.as_wide(),
-                        DRAW_TEXT_FORMAT(0),
-                        &mut rc_text,
-                        Some(&dtt),
-                    )?
-                };
-            }
-        } else {
-            unsafe { SetBkColor(hdc, COLORREF(0xffff00)) };
-            unsafe { GetTextExtentPointW(hdc, content.as_wide(), &mut size).ok()? };
-            unsafe {
-                TextOutW(
-                    hdc,
-                    (rc.width() - size.cx) / 2,
-                    (rc.height() - size.cy) / 2,
-                    content.as_wide(),
-                )
-                .ok()?
-            };
-        }
-
-        Ok(())
-    }
-}
-
-impl ProcHandler for InfoBand {
-    fn handle(
-        &self,
-        window: HWND,
-        message: u32,
-        wparam: WPARAM,
-        lparam: LPARAM,
-    ) -> Option<LRESULT> {
-        match message {
-            WM_PAINT => {
-                log::debug!("Starting repaint (WM_PAINT)");
-                self.paint_without_context(window);
-                None
-            }
-            WM_PRINTCLIENT => {
-                log::debug!("Starting repaint (WM_PRINTCLIENT)");
-                self.paint(window, HDC(wparam.0 as _));
-                None
-            }
-            WM_ERASEBKGND => {
-                log::debug!("Handling background erase (WM_ERASEBKGND)");
-                let res = if self.is_composition_enabled { 1 } else { 0 };
-                // Bypass the default window proc
-                Some(LRESULT(res))
-            }
-            WM_DESTROY => {
-                log::debug!("Shutting down (WM_DESTROY)");
-                // SAFETY: no preconditions
-                unsafe { PostQuitMessage(0) };
-                None
-            }
-            _ => {
-                log::trace!(
-                    "Message handled by default window proc (message=0x{:04x}, wparam=0x{:016x} lparam=0x{:016x})",
-                    message,
-                    wparam.0,
-                    lparam.0
-                );
-                None
-            }
-        }
     }
 }
