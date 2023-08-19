@@ -88,16 +88,8 @@ impl InfoBand {
 
     /// Draw the window content to the given device context.
     fn draw_content(&self, hdc: HDC) -> Result<()> {
-        let theme = unsafe { OpenThemeData(None, w!("BUTTON")) };
-        if theme.is_invalid() {
-            return Err(Error::from(ERROR_FILE_NOT_FOUND));
-        }
-        defer! {
-            if let Err(e) = unsafe { CloseThemeData(theme) } {
-                log::error!("CloseThemeData failed: {}", e);
-            }
-        }
-
+        // Fill in device background when debugging.
+        // Clicks will still pass through because this doesn't set the transparency bits.
         if self.debug_paint.get() {
             unsafe {
                 FillRect(
@@ -106,6 +98,16 @@ impl InfoBand {
                     HBRUSH((COLOR_INFOBK.0 + 1) as isize),
                 )
             };
+        }
+
+        let theme = unsafe { OpenThemeData(None, w!("BUTTON")) };
+        if theme.is_invalid() {
+            return Err(Error::from(ERROR_FILE_NOT_FOUND));
+        }
+        defer! {
+            if let Err(e) = unsafe { CloseThemeData(theme) } {
+                log::error!("CloseThemeData failed: {}", e);
+            }
         }
 
         let top_right_corner_at = |x, y| move |r: RECT| r.with_right_edge_at(x).with_top_edge_at(y);
