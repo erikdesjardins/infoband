@@ -57,13 +57,13 @@ impl ProcHandler for InfoBand {
         match message {
             WM_PAINT => {
                 log::debug!("Starting repaint (WM_PAINT)");
-                self.paint_without_context(window);
-                None
+                self.paint(window);
+                Some(LRESULT(0))
             }
             WM_PRINTCLIENT => {
                 log::debug!("Starting repaint (WM_PRINTCLIENT)");
-                self.paint(window, HDC(wparam.0 as _));
-                None
+                self.paint_to_context(window, HDC(wparam.0 as _));
+                Some(LRESULT(0))
             }
             WM_ERASEBKGND => {
                 log::debug!("Ignoring background erase (WM_ERASEBKGND)");
@@ -84,36 +84,28 @@ impl ProcHandler for InfoBand {
                 }
                 UM_INITIAL_PAINT => {
                     log::debug!("Starting repaint (UM_INITIAL_PAINT)");
-                    self.paint_without_context(window);
-                    None
+                    self.paint(window);
+                    Some(LRESULT(0))
                 }
                 _ => {
-                    log::warn!(
-                        "Unhandled user message (message=WM_USER, wparam/user_message=0x{:016x} lparam=0x{:016x})",
-                        wparam.0,
-                        lparam.0
-                    );
+                    log::warn!("Unhandled user message (message=WM_USER, wparam/user_message=0x{:016x} lparam=0x{:016x})", wparam.0, lparam.0);
                     None
                 }
             },
             WM_TIMER => match wparam {
                 IDT_REDRAW_TIMER => {
                     log::debug!("Starting repaint (IDT_REDRAW_TIMER)");
-                    self.paint_without_context(window);
-                    None
+                    self.paint(window);
+                    Some(LRESULT(0))
                 }
                 _ => {
-                    log::warn!(
-                        "Unhandled timer message (message=WM_TIMER, wparam/timer_id=0x{:016x} lparam=0x{:016x})",
-                        wparam.0,
-                        lparam.0
-                    );
+                    log::warn!("Unhandled timer message (message=WM_TIMER, wparam/timer_id=0x{:016x} lparam=0x{:016x})", wparam.0, lparam.0);
                     None
                 }
             },
             _ => {
                 log::trace!(
-                    "Message handled by default window proc (message=0x{:04x}, wparam=0x{:016x} lparam=0x{:016x})",
+                    "Default window proc (message=0x{:04x}, wparam=0x{:016x} lparam=0x{:016x})",
                     message,
                     wparam.0,
                     lparam.0
