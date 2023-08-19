@@ -9,12 +9,12 @@ use windows::w;
 use windows::Win32::Foundation::{COLORREF, ERROR_FILE_NOT_FOUND, HWND, POINT, RECT};
 use windows::Win32::Graphics::Gdi::{
     GetDC, GetMonitorInfoW, MonitorFromPoint, ReleaseDC, AC_SRC_ALPHA, AC_SRC_OVER, BLENDFUNCTION,
-    DT_NOCLIP, DT_SINGLELINE, HDC, MONITORINFO, MONITOR_DEFAULTTOPRIMARY, RGBQUAD, DT_NOPREFIX,
+    DT_NOCLIP, DT_NOPREFIX, DT_SINGLELINE, HDC, MONITORINFO, MONITOR_DEFAULTTOPRIMARY, RGBQUAD,
 };
 use windows::Win32::UI::Controls::{
     BeginBufferedPaint, CloseThemeData, DrawThemeTextEx, EndBufferedPaint, GetBufferedPaintBits,
-    GetThemeTextExtent, OpenThemeData, BPBF_COMPATIBLEBITMAP, BPBF_TOPDOWNDIB, BPPF_NOCLIP,
-    BP_PAINTPARAMS, DTTOPTS, DTT_COMPOSITED, DTT_TEXTCOLOR, HTHEME,
+    GetThemeTextExtent, OpenThemeData, BPBF_TOPDOWNDIB, BPPF_NOCLIP, BP_PAINTPARAMS, DTTOPTS,
+    DTT_COMPOSITED, DTT_TEXTCOLOR, HTHEME,
 };
 use windows::Win32::UI::WindowsAndMessaging::{UpdateLayeredWindow, ULW_ALPHA};
 
@@ -92,15 +92,18 @@ impl InfoBand {
             BeginBufferedPaint(
                 win_hdc,
                 &RECT::from_size(size),
-                if self.debug_paint.get() {
-                    // Required for us to manually write the background when debugging.
-                    // Always 8bpc.
-                    BPBF_TOPDOWNDIB
-                } else {
-                    // Recommended in hidpi applications.
-                    // Uses color depth of monitor.
-                    BPBF_COMPATIBLEBITMAP
-                },
+                // Required for us to manually write the background when debugging.
+                // Required for DTT_COMPOSITED to work.
+                // Always 8bpc, regardless of color depth of current monitor.
+                // (This isn't a big deal since we're only drawing white + transparency, so we don't need HDR.)
+                //
+                // Note that BPBF_COMPATIBLEBITMAP is recommended for hidpi applications:
+                // https://blogs.windows.com/windowsdeveloper/2017/05/19/improving-high-dpi-experience-gdi-based-desktop-apps/
+                // But as far as I can tell, this is only because it works with GDI scaling,
+                // which is a hack / compatibility layer to make non-DPI-aware apps render some elements at higher DPI.
+                // But we don't need GDI scaling, since we declare ourselves DPI aware, so none of our windows get scaled
+                // and we just draw everything normally (but with manually-computed larger sizes) at the physical screen resolution.
+                BPBF_TOPDOWNDIB,
                 Some(&BP_PAINTPARAMS {
                     cbSize: mem::size_of::<BP_PAINTPARAMS>() as u32,
                     dwFlags: BPPF_NOCLIP,
