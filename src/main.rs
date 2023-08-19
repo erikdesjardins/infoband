@@ -1,4 +1,4 @@
-#![allow(non_snake_case)]
+#![allow(non_snake_case, unstable_name_collisions)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use log::LevelFilter;
@@ -15,7 +15,6 @@ mod defer;
 mod constants;
 mod module;
 mod opt;
-mod proc;
 mod util;
 mod window;
 

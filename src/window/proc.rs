@@ -1,3 +1,4 @@
+use crate::window::messages;
 use std::ptr::NonNull;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -58,8 +59,8 @@ pub unsafe extern "system" fn window_proc<H: ProcHandler>(
 
     let Some(state) = state else {
         log::warn!(
-            "Window proc invoked with no state set (message=0x{:04x}, wparam=0x{:016x} lparam=0x{:016x})",
-            message,
+            "Window proc invoked with no state set ({} wparam=0x{:08x} lparam=0x{:012x})",
+            messages::Name(message),
             wparam.0,
             lparam.0
         );

@@ -3,7 +3,7 @@ use crate::constants::{
 };
 use crate::defer;
 use crate::module;
-use crate::proc::window_proc;
+use crate::window::proc::window_proc;
 use windows::core::{Error, Result, HRESULT, HSTRING};
 use windows::w;
 use windows::Win32::Foundation::LPARAM;
@@ -14,7 +14,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WS_EX_TRANSPARENT, WS_POPUP,
 };
 
+mod messages;
 mod paint;
+mod proc;
 mod state;
 
 pub fn create_and_run_message_loop(debug_paint: bool) -> Result<()> {

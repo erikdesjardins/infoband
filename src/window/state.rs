@@ -1,5 +1,6 @@
 use crate::constants::{IDT_REDRAW_TIMER, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_PAINT};
-use crate::proc::ProcHandler;
+use crate::window::messages;
+use crate::window::proc::ProcHandler;
 use std::cell::Cell;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::Graphics::Gdi::HDC;
@@ -83,12 +84,16 @@ impl ProcHandler for InfoBand {
                     LRESULT(0)
                 }
                 UM_INITIAL_PAINT => {
-                    log::debug!("Starting repaint (UM_INITIAL_PAINT)");
+                    log::debug!("Starting paint (UM_INITIAL_PAINT)");
                     self.paint(window);
                     LRESULT(0)
                 }
                 _ => {
-                    log::warn!("Unhandled user message (message=WM_USER, wparam/user_message=0x{:016x} lparam=0x{:016x})", wparam.0, lparam.0);
+                    log::warn!(
+                        "Unhandled user message (WM_USER id=0x{:08x} lparam=0x{:012x})",
+                        wparam.0,
+                        lparam.0
+                    );
                     return None;
                 }
             },
@@ -99,14 +104,18 @@ impl ProcHandler for InfoBand {
                     LRESULT(0)
                 }
                 _ => {
-                    log::warn!("Unhandled timer message (message=WM_TIMER, wparam/timer_id=0x{:016x} lparam=0x{:016x})", wparam.0, lparam.0);
+                    log::warn!(
+                        "Unhandled timer message (WM_TIMER id=0x{:08x} lparam=0x{:012x})",
+                        wparam.0,
+                        lparam.0
+                    );
                     return None;
                 }
             },
             _ => {
                 log::trace!(
-                    "Default window proc (message=0x{:04x}, wparam=0x{:016x} lparam=0x{:016x})",
-                    message,
+                    "Default window proc ({} wparam=0x{:08x} lparam=0x{:012x})",
+                    messages::Name(message),
                     wparam.0,
                     lparam.0
                 );
