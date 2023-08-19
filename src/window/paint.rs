@@ -2,17 +2,17 @@ use crate::constants::WINDOW_SIZE;
 use crate::defer;
 use crate::util::RectExt;
 use crate::window::state::InfoBand;
+use std::ptr;
 use windows::core::{Error, Result};
 use windows::w;
 use windows::Win32::Foundation::{COLORREF, ERROR_FILE_NOT_FOUND, HWND, POINT, RECT};
 use windows::Win32::Graphics::Gdi::{
-    FillRect, GetDC, ReleaseDC, AC_SRC_ALPHA, AC_SRC_OVER, BLENDFUNCTION, COLOR_INFOBK,
-    DRAW_TEXT_FORMAT, HBRUSH, HDC,
+    GetDC, ReleaseDC, AC_SRC_ALPHA, AC_SRC_OVER, BLENDFUNCTION, DRAW_TEXT_FORMAT, HDC, RGBQUAD,
 };
 use windows::Win32::UI::Controls::{
-    BeginBufferedPaint, CloseThemeData, DrawThemeTextEx, EndBufferedPaint, GetThemeTextExtent,
-    OpenThemeData, BPBF_TOPDOWNDIB, BPPF_NOCLIP, BP_PAINTPARAMS, DTTOPTS, DTT_COMPOSITED,
-    DTT_TEXTCOLOR, HTHEME,
+    BeginBufferedPaint, CloseThemeData, DrawThemeTextEx, EndBufferedPaint, GetBufferedPaintBits,
+    GetThemeTextExtent, OpenThemeData, BPBF_TOPDOWNDIB, BPPF_NOCLIP, BP_PAINTPARAMS, DTTOPTS,
+    DTT_COMPOSITED, DTT_TEXTCOLOR, HTHEME,
 };
 use windows::Win32::UI::WindowsAndMessaging::{UpdateLayeredWindow, ULW_ALPHA};
 
@@ -37,12 +37,14 @@ impl InfoBand {
     /// Toplevel paint method, responsible for dealing with paint buffering and updating the window,
     /// but not with drawing any content.
     fn paint_fallible(&self, window: HWND, win_hdc: HDC) -> Result<()> {
+        let rc = RECT::from_size(WINDOW_SIZE);
+
         // Use buffered paint to draw into temporary mem HDC...
         let mut hdc = HDC::default();
         let buffered_paint = unsafe {
             BeginBufferedPaint(
                 win_hdc,
-                &RECT::from_size(WINDOW_SIZE),
+                &rc,
                 BPBF_TOPDOWNDIB,
                 Some(&BP_PAINTPARAMS {
                     cbSize: std::mem::size_of::<BP_PAINTPARAMS>() as u32,
@@ -56,6 +58,36 @@ impl InfoBand {
             // ...and don't update (false) the underlying window...
             if let Err(e) = unsafe { EndBufferedPaint(buffered_paint, false) } {
                 log::error!("EndBufferedPaint failed: {}", e);
+            }
+        }
+
+        // When debugging is enabled, fill in window background.
+        // We have to do this manually because GDI brushes don't support alpha.
+        if self.debug_paint.get() {
+            // Get the bits from the temporary mem HDC, along with the real width of each row (which may be larger than required).
+            let mut bits = ptr::null_mut();
+            let mut cx_row = 0;
+            unsafe { GetBufferedPaintBits(buffered_paint, &mut bits, &mut cx_row)? };
+            assert!(!bits.is_null());
+
+            let cx_row: usize = cx_row.try_into().unwrap();
+            let cx: usize = rc.width().try_into().unwrap();
+            let cy: usize = rc.height().try_into().unwrap();
+            assert!(cx_row >= cx);
+
+            for y in 0..cy {
+                for x in 0..cx {
+                    // SAFETY: this is in bounds of the bitmap allocation per GetBufferedPaintBits contract
+                    unsafe {
+                        let elem = bits.add(y * cx_row + x);
+                        *elem = RGBQUAD {
+                            rgbRed: 0x77,
+                            rgbGreen: 0x00,
+                            rgbBlue: 0x00,
+                            rgbReserved: 0xff, // alpha
+                        };
+                    }
+                }
             }
         }
 
@@ -88,18 +120,6 @@ impl InfoBand {
 
     /// Draw the window content to the given device context.
     fn draw_content(&self, hdc: HDC) -> Result<()> {
-        // Fill in device background when debugging.
-        // Clicks will still pass through because this doesn't set the transparency bits.
-        if self.debug_paint.get() {
-            unsafe {
-                FillRect(
-                    hdc,
-                    &RECT::from_size(WINDOW_SIZE),
-                    HBRUSH((COLOR_INFOBK.0 + 1) as isize),
-                )
-            };
-        }
-
         let theme = unsafe { OpenThemeData(None, w!("BUTTON")) };
         if theme.is_invalid() {
             return Err(Error::from(ERROR_FILE_NOT_FOUND));
