@@ -1,5 +1,5 @@
 use crate::constants::{IDT_REDRAW_TIMER, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_PAINT};
-use crate::util::{ScaleBy, ScalingFactor};
+use crate::utils::{ScaleBy, ScalingFactor};
 use crate::window::messages;
 use crate::window::proc::ProcHandler;
 use std::cell::Cell;

@@ -3,7 +3,7 @@ use crate::constants::{
     UNSCALED_SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP, UNSCALED_WINDOW_WIDTH,
 };
 use crate::defer;
-use crate::util::{RectExt, ScaleBy};
+use crate::utils::{RectExt, ScaleBy};
 use crate::window::state::InfoBand;
 use std::mem;
 use std::ptr::{self};

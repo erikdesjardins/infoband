@@ -15,7 +15,7 @@ mod macros;
 mod constants;
 mod module;
 mod opt;
-mod util;
+mod utils;
 mod window;
 
 fn main() -> Result<(), Error> {
