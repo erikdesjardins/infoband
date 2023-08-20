@@ -149,7 +149,7 @@ fn fetch_network(time_delta: Option<Duration>, prev_network_byte_count: &Cell<u6
             continue;
         }
         last_address = if_row.bPhysAddr;
-        cur_network_byte_count += u64::from(if_row.dwInOctets);
+        cur_network_byte_count += u64::from(if_row.dwInOctets) + u64::from(if_row.dwOutOctets);
     }
 
     // On first sample, just store the current byte count and return zero.
