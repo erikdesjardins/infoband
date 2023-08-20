@@ -12,8 +12,8 @@ use windows::Win32::UI::HiDpi::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DispatchMessageW, GetMessageW, LoadCursorW, PostMessageW, RegisterClassW,
-    SetTimer, ShowWindow, CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, IDC_ARROW, MSG, SW_SHOW, WM_USER,
-    WNDCLASSW, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_EX_LAYERED, WS_EX_TOOLWINDOW,
+    SetTimer, ShowWindow, CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, IDC_ARROW, MSG, SW_SHOWNA,
+    WM_USER, WNDCLASSW, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_EX_LAYERED, WS_EX_TOOLWINDOW,
     WS_EX_TRANSPARENT, WS_POPUP,
 };
 
@@ -107,9 +107,9 @@ pub fn create_and_run_message_loop(debug_paint: bool) -> Result<()> {
         return Err(Error::from_win32());
     }
 
-    // Show window after setting it up
-    // (Note that layered windows still don't render until you call UpdateLayeredWindow)
-    unsafe { ShowWindow(window, SW_SHOW) };
+    // Show window (without activating/focusing it) after setting it up.
+    // Note that layered windows still don't render until you call UpdateLayeredWindow.
+    unsafe { ShowWindow(window, SW_SHOWNA) };
 
     // Run message loop (will block)
     run_message_loop()?;
