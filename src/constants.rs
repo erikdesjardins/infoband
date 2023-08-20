@@ -82,5 +82,5 @@ pub const FETCH_TIMER_MS: u32 = 1000;
 pub const REDRAW_TIMER_MS: u32 = 5 * 1000;
 
 // Metrics
-pub const SAMPLE_COUNT: usize = 10;
+pub const SAMPLE_COUNT: usize = 8;
 pub const EXPONENTIAL_DECAY_ALPHA: f64 = 0.7;
