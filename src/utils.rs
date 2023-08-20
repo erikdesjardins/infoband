@@ -147,7 +147,7 @@ impl ScaleBy for SIZE {
 
 #[cfg(test)]
 mod tests {
-    use super::{RectExt, ScaleBy, ScalingFactor, RECT};
+    use super::*;
 
     #[test]
     fn with_right_edge_at() {
