@@ -205,7 +205,17 @@ impl InfoBand {
         draw_text(
             hdc,
             text_style,
-            unsafe { w!("7:22 PM").as_wide() },
+            unsafe { w!("0.5% CPU").as_wide() },
+            right_midpoint_at(
+                size.cx - UNSCALED_WINDOW_WIDTH.scale_by(dpi) / 2,
+                UNSCALED_FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi),
+            ),
+        )?;
+
+        draw_text(
+            hdc,
+            text_style,
+            unsafe { w!("26.1% MEM").as_wide() },
             right_midpoint_at(
                 size.cx,
                 UNSCALED_FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi),
@@ -215,7 +225,17 @@ impl InfoBand {
         draw_text(
             hdc,
             text_style,
-            unsafe { w!("2023-08-19").as_wide() },
+            unsafe { w!("0.1MB/s DSK").as_wide() },
+            right_midpoint_at(
+                size.cx - UNSCALED_WINDOW_WIDTH.scale_by(dpi) / 2,
+                UNSCALED_SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi),
+            ),
+        )?;
+
+        draw_text(
+            hdc,
+            text_style,
+            unsafe { w!("0.0Mb/s NET").as_wide() },
             right_midpoint_at(
                 size.cx,
                 UNSCALED_SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi),
