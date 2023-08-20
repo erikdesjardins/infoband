@@ -17,12 +17,12 @@ fn messages() -> &'static HashMap<u32, &'static str> {
             let mut map = HashMap::new();
 
             macro_rules! add {
-            ($($msg:ident),* $(,)?) => {
-                $(
-                    map.insert($msg, stringify!($msg));
-                )*
-            };
-        }
+                ($($msg:ident),* $(,)?) => {
+                    $(
+                        map.insert($msg, stringify!($msg));
+                    )*
+                };
+            }
 
             add!(
                 WM_ACTIVATE,

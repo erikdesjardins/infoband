@@ -33,14 +33,22 @@ pub unsafe extern "system" fn window_proc<H: ProcHandler>(
     let state = match message {
         // On create, set to default state
         WM_NCCREATE => {
-            let state = match H::create(window) {
-                Ok(state) => Box::new(state),
+            #[cold]
+            #[inline(never)]
+            fn create_state<H: ProcHandler>(window: HWND) -> Result<Box<H>> {
+                let state = H::create(window)?;
+                Ok(Box::new(state))
+            }
+
+            let state = match create_state::<H>(window) {
+                Ok(state) => state,
                 Err(e) => {
                     log::error!("Failed to create window state: {}", e);
                     // SAFETY: propagates same safety requirements as caller
                     return unsafe { DefWindowProcW(window, message, wparam, lparam) };
                 }
             };
+
             // SAFETY: handle is valid as we created it
             unsafe { SetWindowLongPtrW(window, GWLP_USERDATA, Box::into_raw(state) as isize) };
             // SAFETY: propagates same safety requirements as caller
@@ -54,6 +62,7 @@ pub unsafe extern "system" fn window_proc<H: ProcHandler>(
                 // SAFETY: state is either valid (as we set GWLP_USERDATA when constructing the window), or null
                 unsafe { drop(Box::from_raw(state)) };
             }
+
             // SAFETY: propagates same safety requirements as caller
             return unsafe { DefWindowProcW(window, message, wparam, lparam) };
         }
