@@ -10,7 +10,7 @@ use log4rs::Config;
 use std::env;
 use windows::core::Error;
 
-mod defer;
+mod macros;
 
 mod constants;
 mod module;
