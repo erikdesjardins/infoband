@@ -7,12 +7,11 @@ use crate::window::proc::ProcHandler;
 use std::cell::Cell;
 use windows::core::Result;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, SIZE, WPARAM};
-use windows::Win32::Graphics::Gdi::HDC;
 use windows::Win32::UI::Controls::{BufferedPaintInit, BufferedPaintUnInit};
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
     PostQuitMessage, USER_DEFAULT_SCREEN_DPI, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED,
-    WM_ERASEBKGND, WM_PAINT, WM_PRINTCLIENT, WM_TIMER, WM_USER,
+    WM_ERASEBKGND, WM_NCCALCSIZE, WM_NCPAINT, WM_PAINT, WM_TIMER, WM_USER,
 };
 
 use super::metrics::Metrics;
@@ -75,19 +74,43 @@ impl ProcHandler for InfoBand {
         lparam: LPARAM,
     ) -> Option<LRESULT> {
         Some(match message {
-            WM_PAINT => {
-                log::debug!("Starting repaint (WM_PAINT)");
-                self.paint(window);
+            WM_NCCALCSIZE => {
+                log::debug!("Computing size of client area (WM_NCCALCSIZE)");
+                // Handling this is required to ensure our window has no frame (even though it wouldn't be visible).
+                // https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-nccalcsize
+                if wparam.0 != 0 {
+                    // > When wParam is TRUE, simply returning 0 without processing the NCCALCSIZE_PARAMS rectangles
+                    // > will cause the client area to resize to the size of the window, including the window frame.
+                    // > This will remove the window frame and caption items from your window, leaving only the client area displayed.
+                    //
+                    // This is exactly what we want.
+                    LRESULT(0)
+                } else {
+                    // > If wParam is FALSE, lParam points to a RECT structure.
+                    // > On entry, the structure contains the proposed window rectangle for the window.
+                    // > On exit, the structure should contain the screen coordinates of the corresponding window client area.
+                    //
+                    // Similarly, we want the client area to take up the entire window size, so do nothing here as well.
+                    //
+                    // > If the wParam parameter is FALSE, the application should return zero.
+                    LRESULT(0)
+                }
+            }
+            WM_NCPAINT => {
+                log::debug!("Ignoring frame repaint (WM_NCPAINT)");
+                // We don't have a frame, so don't paint it.
                 LRESULT(0)
             }
-            WM_PRINTCLIENT => {
-                log::debug!("Starting repaint (WM_PRINTCLIENT)");
-                self.paint_to_context(window, HDC(wparam.0 as _));
-                LRESULT(0)
+            WM_PAINT => {
+                log::debug!("Ignoring client repaint (WM_PAINT)");
+                // Layered windows don't have to handle WM_PAINT.
+                // We do need to revalidate the window (here: let DefWindowProc do so),
+                // or Windows will send us an endless stream of paint requests.
+                return None;
             }
             WM_ERASEBKGND => {
                 log::debug!("Ignoring background erase (WM_ERASEBKGND)");
-                // Since we use compositing, we don't need to erase the background
+                // Since we use compositing, we don't need to erase the background.
                 LRESULT(1)
             }
             WM_DPICHANGED => {

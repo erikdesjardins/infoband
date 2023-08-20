@@ -71,26 +71,22 @@ impl InfoBand {
 
     /// Paint the window using the window's device context.
     pub fn paint(&self, window: HWND) {
-        let win_hdc = unsafe { GetDC(window) };
-        defer! {
-            _ = unsafe { ReleaseDC(window, win_hdc) };
-        }
-
-        self.paint_to_context(window, win_hdc);
-    }
-
-    /// Paint the window to the given context.
-    pub fn paint_to_context(&self, window: HWND, win_hdc: HDC) {
-        if let Err(e) = self.paint_fallible(window, win_hdc) {
+        if let Err(e) = self.paint_fallible(window) {
             log::error!("Paint failed: {}", e);
         }
     }
 
     /// Toplevel paint method, responsible for dealing with paint buffering and updating the window,
     /// but not with drawing any content.
-    fn paint_fallible(&self, window: HWND, win_hdc: HDC) -> Result<()> {
+    fn paint_fallible(&self, window: HWND) -> Result<()> {
         let size = self.size.get();
         let position = self.position.get();
+
+        // Fetch win HDC so we can create temporary mem HDC of the same size.
+        let win_hdc = unsafe { GetDC(window) };
+        defer! {
+            _ = unsafe { ReleaseDC(window, win_hdc) };
+        }
 
         // Use buffered paint to draw into temporary mem HDC...
         let mut hdc = HDC::default();
