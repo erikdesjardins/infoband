@@ -2,7 +2,6 @@ use crate::constants::{
     FETCH_TIMER_MS, IDT_FETCH_TIMER, IDT_REDRAW_TIMER, REDRAW_TIMER_MS, UM_ENABLE_DEBUG_PAINT,
     UM_INITIAL_PAINT,
 };
-use crate::defer;
 use crate::module;
 use crate::window::proc::window_proc;
 use windows::core::{Error, Result, HRESULT, HSTRING};
@@ -12,10 +11,9 @@ use windows::Win32::UI::HiDpi::{
     SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DispatchMessageW, GetMessageW, KillTimer, LoadCursorW, PostMessageW,
-    RegisterClassW, SetTimer, ShowWindow, CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, IDC_ARROW, MSG,
-    SW_SHOW, WM_USER, WNDCLASSW, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_EX_LAYERED,
-    WS_EX_TRANSPARENT, WS_POPUP,
+    CreateWindowExW, DispatchMessageW, GetMessageW, LoadCursorW, PostMessageW, RegisterClassW,
+    SetTimer, ShowWindow, CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, IDC_ARROW, MSG, SW_SHOW, WM_USER,
+    WNDCLASSW, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_EX_LAYERED, WS_EX_TRANSPARENT, WS_POPUP,
 };
 
 mod messages;
@@ -55,7 +53,7 @@ pub fn create_and_run_message_loop(debug_paint: bool) -> Result<()> {
     let atom = unsafe { RegisterClassW(&wc) };
     assert!(atom != 0);
 
-    // Note that this window will be destroyed by the default handler for WM_CLOSE
+    // Note: this window will be destroyed by the default handler for WM_CLOSE.
     let window = {
         let window = unsafe {
             CreateWindowExW(
@@ -95,25 +93,17 @@ pub fn create_and_run_message_loop(debug_paint: bool) -> Result<()> {
     // Enqueue a message for initial paint
     unsafe { PostMessageW(window, WM_USER, UM_INITIAL_PAINT, LPARAM(0)).ok()? };
 
-    // Set up timer to fetch metrics
+    // Set up timer to fetch metrics.
+    // Note: this timer will be destroyed when the window is destroyed. (And in fact we can't destroy it manually, since the window handle will be invalid.)
     if unsafe { SetTimer(window, IDT_FETCH_TIMER.0, FETCH_TIMER_MS, None) } == 0 {
         return Err(Error::from_win32());
     }
-    defer! {
-        if let Err(e) = unsafe { KillTimer(window, IDT_FETCH_TIMER.0).ok() } {
-            log::error!("KillTimer failed: {}", e);
-        }
-    };
 
-    // Set up timer to redraw window periodically
+    // Set up timer to redraw window periodically.
+    // Note: this timer will be destroyed when the window is destroyed. (And in fact we can't destroy it manually, since the window handle will be invalid.)
     if unsafe { SetTimer(window, IDT_REDRAW_TIMER.0, REDRAW_TIMER_MS, None) } == 0 {
         return Err(Error::from_win32());
     }
-    defer! {
-        if let Err(e) = unsafe { KillTimer(window, IDT_REDRAW_TIMER.0).ok() } {
-            log::error!("KillTimer failed: {}", e);
-        }
-    };
 
     // Show window after setting it up
     // (Note that layered windows still don't render until you call UpdateLayeredWindow)
