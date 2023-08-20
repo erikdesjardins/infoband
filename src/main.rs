@@ -1,4 +1,9 @@
-#![allow(non_snake_case, unstable_name_collisions, clippy::let_unit_value)]
+#![allow(
+    non_snake_case,
+    non_camel_case_types,
+    unstable_name_collisions,
+    clippy::let_unit_value
+)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use log::LevelFilter;
