@@ -1,4 +1,7 @@
-use crate::constants::{UNSCALED_OFFSET_FROM_RIGHT_EDGE, UNSCALED_WINDOW_WIDTH};
+use crate::constants::{
+    UNSCALED_FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP, UNSCALED_OFFSET_FROM_RIGHT,
+    UNSCALED_SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP, UNSCALED_WINDOW_WIDTH,
+};
 use crate::defer;
 use crate::util::{RectExt, ScaleBy};
 use crate::window::state::InfoBand;
@@ -13,10 +16,13 @@ use windows::Win32::Graphics::Gdi::{
 };
 use windows::Win32::UI::Controls::{
     BeginBufferedPaint, CloseThemeData, DrawThemeTextEx, EndBufferedPaint, GetBufferedPaintBits,
-    GetThemeTextExtent, OpenThemeData, BPBF_TOPDOWNDIB, BPPF_NOCLIP, BP_PAINTPARAMS, DTTOPTS,
-    DTT_COMPOSITED, DTT_TEXTCOLOR, HTHEME,
+    GetThemeTextExtent, BPBF_TOPDOWNDIB, BPPF_NOCLIP, BP_PAINTPARAMS, DTTOPTS, DTT_COMPOSITED,
+    DTT_TEXTCOLOR, HTHEME, TEXT_BODYTEXT,
 };
-use windows::Win32::UI::WindowsAndMessaging::{UpdateLayeredWindow, ULW_ALPHA};
+use windows::Win32::UI::HiDpi::OpenThemeDataForDpi;
+use windows::Win32::UI::WindowsAndMessaging::{
+    UpdateLayeredWindow, ULW_ALPHA, USER_DEFAULT_SCREEN_DPI,
+};
 
 impl InfoBand {
     pub fn compute_size_and_position(&self) {
@@ -25,7 +31,7 @@ impl InfoBand {
         }
     }
 
-    pub fn compute_size_and_position_fallible(&self) -> Result<()> {
+    fn compute_size_and_position_fallible(&self) -> Result<()> {
         let dpi = self.dpi.get();
 
         // Get primary monitor (which always includes the origin)
@@ -46,7 +52,7 @@ impl InfoBand {
         let top = monitor_info.rcWork.bottom;
         let bottom = monitor_info.rcMonitor.bottom;
         // Right : i32edge the specified distance from the right edge of the screen
-        let right = monitor_info.rcMonitor.right - UNSCALED_OFFSET_FROM_RIGHT_EDGE.scale_by(dpi);
+        let right = monitor_info.rcMonitor.right - UNSCALED_OFFSET_FROM_RIGHT.scale_by(dpi);
         // Left edge positioned at the specified width
         let left = right - UNSCALED_WINDOW_WIDTH.scale_by(dpi);
 
@@ -178,25 +184,42 @@ impl InfoBand {
 
     /// Draw the window content to the given device context.
     fn draw_content(&self, hdc: HDC) -> Result<()> {
+        let dpi = self.dpi.get();
         let size = self.size.get();
 
-        let theme = unsafe { OpenThemeData(None, w!("TASKBAR")) };
-        if theme.is_invalid() {
+        let text_style = unsafe {
+            OpenThemeDataForDpi(None, w!("TEXTSTYLE"), USER_DEFAULT_SCREEN_DPI.scale_by(dpi))
+        };
+        if text_style.is_invalid() {
             return Err(Error::from(ERROR_FILE_NOT_FOUND));
         }
         defer! {
-            if let Err(e) = unsafe { CloseThemeData(theme) } {
+            if let Err(e) = unsafe { CloseThemeData(text_style) } {
                 log::error!("CloseThemeData failed: {}", e);
             }
         }
 
-        let top_right_corner_at = |x, y| move |r: RECT| r.with_right_edge_at(x).with_top_edge_at(y);
+        let right_midpoint_at =
+            |x, y| move |r: RECT| r.with_right_edge_at(x).with_vertical_midpoint_at(y);
 
         draw_text(
             hdc,
-            theme,
-            unsafe { w!("Test content glass").as_wide() },
-            top_right_corner_at(size.cx, size.cy / 2),
+            text_style,
+            unsafe { w!("7:22 PM").as_wide() },
+            right_midpoint_at(
+                size.cx,
+                UNSCALED_FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi),
+            ),
+        )?;
+
+        draw_text(
+            hdc,
+            text_style,
+            unsafe { w!("2023-08-19").as_wide() },
+            right_midpoint_at(
+                size.cx,
+                UNSCALED_SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi),
+            ),
         )?;
 
         Ok(())
@@ -205,11 +228,11 @@ impl InfoBand {
 
 fn draw_text(
     hdc: HDC,
-    theme: HTHEME,
+    text_style: HTHEME,
     text: &[u16],
     position: impl FnOnce(RECT) -> RECT,
 ) -> Result<()> {
-    let partid = 0;
+    let partid = TEXT_BODYTEXT;
     let stateid = 0;
     // > DrawText is somewhat faster when DT_NOCLIP is used.
     // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-drawtext
@@ -218,16 +241,16 @@ fn draw_text(
 
     // Get size of text
     let text_size =
-        unsafe { GetThemeTextExtent(theme, hdc, partid, stateid, text, textflags, None)? };
+        unsafe { GetThemeTextExtent(text_style, hdc, partid.0, stateid, text, textflags, None)? };
 
     // Move text into desired position
     let mut output_rect = position(text_size);
 
     unsafe {
         DrawThemeTextEx(
-            theme,
+            text_style,
             hdc,
-            partid,
+            partid.0,
             stateid,
             text,
             textflags,

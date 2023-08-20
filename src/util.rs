@@ -21,7 +21,8 @@ pub trait RectExt {
     fn size(self) -> SIZE;
 
     fn with_right_edge_at(self, x: i32) -> Self;
-    fn with_top_edge_at(self, x: i32) -> Self;
+    fn with_top_edge_at(self, y: i32) -> Self;
+    fn with_vertical_midpoint_at(self, y: i32) -> Self;
 
     fn width(&self) -> i32;
     fn height(&self) -> i32;
@@ -63,6 +64,16 @@ impl RectExt for RECT {
         Self {
             top: y,
             bottom: y + self.height(),
+            ..self
+        }
+    }
+
+    fn with_vertical_midpoint_at(self, y: i32) -> Self {
+        let extra = self.height() % 2;
+        let half_height = self.height() / 2;
+        Self {
+            top: y - half_height,
+            bottom: y + half_height + extra,
             ..self
         }
     }
@@ -136,7 +147,63 @@ impl ScaleBy for SIZE {
 
 #[cfg(test)]
 mod tests {
-    use super::{ScaleBy, ScalingFactor};
+    use super::{RectExt, ScaleBy, ScalingFactor, RECT};
+
+    #[test]
+    fn with_right_edge_at() {
+        let before = RECT {
+            left: 1,
+            top: 2,
+            right: 11,
+            bottom: 12,
+        };
+        let after = before.with_right_edge_at(20);
+        assert_eq!(after.right, 20);
+        assert_eq!(after.top, before.top);
+        assert_eq!(after.size(), before.size());
+    }
+
+    #[test]
+    fn with_top_edge_at() {
+        let before = RECT {
+            left: 2,
+            top: 1,
+            right: 12,
+            bottom: 11,
+        };
+        let after = before.with_top_edge_at(20);
+        assert_eq!(after.top, 20);
+        assert_eq!(after.left, before.left);
+        assert_eq!(after.size(), before.size());
+    }
+
+    #[test]
+    fn with_vertical_midpoint_at() {
+        let before = RECT {
+            left: 1,
+            top: 2,
+            right: 11,
+            bottom: 12,
+        };
+        let after = before.with_vertical_midpoint_at(20);
+        assert_eq!(after.top, 15);
+        assert_eq!(after.left, before.left);
+        assert_eq!(after.size(), before.size());
+    }
+
+    #[test]
+    fn with_vertical_midpoint_at_odd_height() {
+        let before = RECT {
+            left: 2,
+            top: 1,
+            right: 10,
+            bottom: 10,
+        };
+        let after = before.with_vertical_midpoint_at(20);
+        assert_eq!(after.top, 16);
+        assert_eq!(after.left, before.left);
+        assert_eq!(after.size(), before.size());
+    }
 
     #[test]
     fn scaling_by_zero() {
