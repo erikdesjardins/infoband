@@ -57,23 +57,20 @@ pub fn create_and_run_message_loop(debug_paint: bool) -> Result<()> {
 
     // Note that this window will be destroyed by the default handler for WM_CLOSE
     let window = {
-        // Layered window allows transparency
-        // https://learn.microsoft.com/en-us/windows/win32/winmsg/window-features#layered-windows
-        let mut exstyle = WS_EX_LAYERED;
-        if !debug_paint {
-            // Transparent window allows clicks to pass through everywhere
-            // (Layered windows allow clicks to pass through in transparent areas only)
-            exstyle |= WS_EX_TRANSPARENT;
-        }
-
-        let style = WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
-
         let window = unsafe {
             CreateWindowExW(
-                exstyle,
+                // Layered window allows transparency:
+                // https://learn.microsoft.com/en-us/windows/win32/winmsg/window-features#layered-windows
+                // Transparent window allows clicks to pass through everywhere.
+                // (Layered windows allow clicks to pass through in transparent areas only.)
+                WS_EX_LAYERED | WS_EX_TRANSPARENT,
                 class,
                 None,
-                style,
+                // Popup window removes borders and title bar.
+                // Clipping probably not necessary since we don't have child windows.
+                WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+                // Leave all positions defaulted.
+                // Layered windows aren't displayed until UpdateLayeredWindow is called, so we'll set it then.
                 CW_USEDEFAULT,
                 CW_USEDEFAULT,
                 CW_USEDEFAULT,
