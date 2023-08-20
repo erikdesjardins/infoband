@@ -13,7 +13,8 @@ use windows::Win32::UI::HiDpi::{
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DispatchMessageW, GetMessageW, LoadCursorW, PostMessageW, RegisterClassW,
     SetTimer, ShowWindow, CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, IDC_ARROW, MSG, SW_SHOW, WM_USER,
-    WNDCLASSW, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_EX_LAYERED, WS_EX_TRANSPARENT, WS_POPUP,
+    WNDCLASSW, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_EX_LAYERED, WS_EX_TOOLWINDOW,
+    WS_EX_TRANSPARENT, WS_POPUP,
 };
 
 mod messages;
@@ -61,7 +62,8 @@ pub fn create_and_run_message_loop(debug_paint: bool) -> Result<()> {
                 // https://learn.microsoft.com/en-us/windows/win32/winmsg/window-features#layered-windows
                 // Transparent window allows clicks to pass through everywhere.
                 // (Layered windows allow clicks to pass through in transparent areas only.)
-                WS_EX_LAYERED | WS_EX_TRANSPARENT,
+                // Tool window hides it from the taskbar.
+                WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW,
                 class,
                 None,
                 // Popup window removes borders and title bar.
