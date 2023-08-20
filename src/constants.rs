@@ -83,4 +83,4 @@ pub const REDRAW_TIMER_MS: u32 = 5 * 1000;
 
 // Metrics
 pub const SAMPLE_COUNT: usize = 8;
-pub const EXPONENTIAL_DECAY_ALPHA: f64 = 0.7;
+pub const EXPONENTIAL_DECAY_ALPHA: f64 = 0.631; // 0.631^5 = 0.1, so 90% of the weight is for the last 5 samples
