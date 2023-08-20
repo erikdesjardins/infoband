@@ -44,8 +44,8 @@ pub unsafe extern "system" fn window_proc<H: ProcHandler>(
                 Ok(state) => state,
                 Err(e) => {
                     log::error!("Failed to create window state: {}", e);
-                    // SAFETY: propagates same safety requirements as caller
-                    return unsafe { DefWindowProcW(window, message, wparam, lparam) };
+                    // Returning false terminates window creation
+                    return LRESULT(0);
                 }
             };
 
