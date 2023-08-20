@@ -74,7 +74,13 @@ pub const UM_ENABLE_DEBUG_PAINT: WPARAM = WPARAM(1);
 pub const UM_INITIAL_PAINT: WPARAM = WPARAM(2);
 
 // Timer ids
-pub const IDT_REDRAW_TIMER: WPARAM = WPARAM(1);
+pub const IDT_FETCH_TIMER: WPARAM = WPARAM(1);
+pub const IDT_REDRAW_TIMER: WPARAM = WPARAM(2);
 
 // Timer intervals
+pub const FETCH_TIMER_MS: u32 = 1000;
 pub const REDRAW_TIMER_MS: u32 = 5 * 1000;
+
+// Metrics
+pub const SAMPLE_COUNT: usize = 10;
+pub const EXPONENTIAL_DECAY_ALPHA: f64 = 0.7;

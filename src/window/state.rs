@@ -1,4 +1,6 @@
-use crate::constants::{IDT_REDRAW_TIMER, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_PAINT};
+use crate::constants::{
+    IDT_FETCH_TIMER, IDT_REDRAW_TIMER, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_PAINT,
+};
 use crate::utils::{ScaleBy, ScalingFactor};
 use crate::window::messages;
 use crate::window::proc::ProcHandler;
@@ -13,17 +15,21 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WM_ERASEBKGND, WM_PAINT, WM_PRINTCLIENT, WM_TIMER, WM_USER,
 };
 
+use super::metrics::Metrics;
+
 pub struct InfoBand {
     /// SAFETY: must only be provided after calling `BufferedPaintInit`.
     called_buffered_paint_init: (),
     /// Whether to make the window more visible for debugging.
     pub debug_paint: Cell<bool>,
-    /// Current DPI scaling factor of the window.
+    /// DPI scaling factor of the window.
     pub dpi: Cell<ScalingFactor>,
-    /// Current size of the window.
+    /// Size of the window.
     pub size: Cell<SIZE>,
-    /// Current position of the window.
+    /// Position of the window.
     pub position: Cell<POINT>,
+    /// Performance metrics.
+    pub metrics: Metrics,
 }
 
 impl Drop for InfoBand {
@@ -37,7 +43,7 @@ impl Drop for InfoBand {
 }
 
 impl ProcHandler for InfoBand {
-    fn create(window: HWND) -> Result<Self> {
+    fn new(window: HWND) -> Result<Self> {
         let dpi = unsafe { GetDpiForWindow(window) };
         let dpi = ScalingFactor::from_ratio(dpi, USER_DEFAULT_SCREEN_DPI);
 
@@ -45,11 +51,14 @@ impl ProcHandler for InfoBand {
         let size = SIZE { cx: 0, cy: 0 };
         let position = POINT { x: 0, y: 0 };
 
+        let metrics = Metrics::default();
+
         Ok(Self {
             debug_paint: Cell::new(false),
             dpi: Cell::new(dpi),
             size: Cell::new(size),
             position: Cell::new(position),
+            metrics,
             called_buffered_paint_init: {
                 // SAFETY: init and uninit must be called in pairs; after this point, we construct self, so drop will call uninit
                 unsafe { BufferedPaintInit()? }
@@ -129,6 +138,11 @@ impl ProcHandler for InfoBand {
                 }
             },
             WM_TIMER => match wparam {
+                IDT_FETCH_TIMER => {
+                    log::debug!("Fetching metrics (IDT_FETCH_TIMER)");
+                    self.metrics.fetch();
+                    LRESULT(0)
+                }
                 IDT_REDRAW_TIMER => {
                     log::debug!("Starting repaint (IDT_REDRAW_TIMER)");
                     self.paint(window);

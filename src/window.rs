@@ -1,5 +1,6 @@
 use crate::constants::{
-    IDT_REDRAW_TIMER, REDRAW_TIMER_MS, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_PAINT,
+    FETCH_TIMER_MS, IDT_FETCH_TIMER, IDT_REDRAW_TIMER, REDRAW_TIMER_MS, UM_ENABLE_DEBUG_PAINT,
+    UM_INITIAL_PAINT,
 };
 use crate::defer;
 use crate::module;
@@ -18,6 +19,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 mod messages;
+mod metrics;
 mod paint;
 mod proc;
 mod state;
@@ -95,6 +97,16 @@ pub fn create_and_run_message_loop(debug_paint: bool) -> Result<()> {
 
     // Enqueue a message for initial paint
     unsafe { PostMessageW(window, WM_USER, UM_INITIAL_PAINT, LPARAM(0)).ok()? };
+
+    // Set up timer to fetch metrics
+    if unsafe { SetTimer(window, IDT_FETCH_TIMER.0, FETCH_TIMER_MS, None) } == 0 {
+        return Err(Error::from_win32());
+    }
+    defer! {
+        if let Err(e) = unsafe { KillTimer(window, IDT_FETCH_TIMER.0).ok() } {
+            log::error!("KillTimer failed: {}", e);
+        }
+    };
 
     // Set up timer to redraw window periodically
     if unsafe { SetTimer(window, IDT_REDRAW_TIMER.0, REDRAW_TIMER_MS, None) } == 0 {

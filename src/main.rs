@@ -15,6 +15,7 @@ mod macros;
 mod constants;
 mod module;
 mod opt;
+mod stats;
 mod utils;
 mod window;
 

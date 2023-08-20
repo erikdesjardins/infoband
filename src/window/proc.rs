@@ -15,7 +15,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 // That function is of course only one way to send messages to a window,
 // but it's part of a general pattern (e.g. message loops are also thread local).
 pub trait ProcHandler: Sized {
-    fn create(window: HWND) -> Result<Self>;
+    fn new(window: HWND) -> Result<Self>;
 
     /// Handle a window message.
     ///
@@ -36,7 +36,7 @@ pub unsafe extern "system" fn window_proc<H: ProcHandler>(
             #[cold]
             #[inline(never)]
             fn create_state<H: ProcHandler>(window: HWND) -> Result<Box<H>> {
-                let state = H::create(window)?;
+                let state = H::new(window)?;
                 Ok(Box::new(state))
             }
 

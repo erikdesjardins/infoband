@@ -202,40 +202,44 @@ impl InfoBand {
         let right_midpoint_at =
             |x, y| move |r: RECT| r.with_right_edge_at(x).with_vertical_midpoint_at(y);
 
+        let cpu = self.metrics.avg_cpu_percent();
         draw_text(
             hdc,
             text_style,
-            unsafe { w!("0.5% CPU").as_wide() },
+            &format!("{:.1}% CPU", cpu),
             right_midpoint_at(
                 size.cx - UNSCALED_WINDOW_WIDTH.scale_by(dpi) / 2,
                 UNSCALED_FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi),
             ),
         )?;
 
+        let mem = self.metrics.avg_memory_percent();
         draw_text(
             hdc,
             text_style,
-            unsafe { w!("26.1% MEM").as_wide() },
+            &format!("{:.1}% MEM", mem),
             right_midpoint_at(
                 size.cx,
                 UNSCALED_FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi),
             ),
         )?;
 
+        let dsk = self.metrics.avg_disk_mbyte();
         draw_text(
             hdc,
             text_style,
-            unsafe { w!("0.1MB/s DSK").as_wide() },
+            &format!("{:.1}MB/s DSK", dsk),
             right_midpoint_at(
                 size.cx - UNSCALED_WINDOW_WIDTH.scale_by(dpi) / 2,
                 UNSCALED_SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi),
             ),
         )?;
 
+        let net = self.metrics.avg_network_mbit();
         draw_text(
             hdc,
             text_style,
-            unsafe { w!("0.0Mb/s NET").as_wide() },
+            &format!("{:.1}Mb/s NET", net),
             right_midpoint_at(
                 size.cx,
                 UNSCALED_SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi),
@@ -249,9 +253,11 @@ impl InfoBand {
 fn draw_text(
     hdc: HDC,
     text_style: HTHEME,
-    text: &[u16],
+    text: &str,
     position: impl FnOnce(RECT) -> RECT,
 ) -> Result<()> {
+    let text: &[u16] = &text.encode_utf16().collect::<Vec<_>>();
+
     let partid = TEXT_BODYTEXT;
     let stateid = 0;
     // > DrawText is somewhat faster when DT_NOCLIP is used.
