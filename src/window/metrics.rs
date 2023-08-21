@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use windows::core::Result;
 use windows::Win32::Foundation::{FILETIME, WIN32_ERROR};
 use windows::Win32::NetworkManagement::IpHelper::{GetIfTable, MIB_IFROW, MIB_IFTABLE};
+use windows::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
 use windows::Win32::System::Threading::GetSystemTimes;
 
 #[derive(Default)]
@@ -130,8 +131,17 @@ fn fetch_cpu(prev_cpu_times: &Cell<Option<(u64, u64, u64)>>) -> Result<f64> {
 }
 
 fn fetch_memory() -> Result<f64> {
-    // TODO: implement
-    let percent = 0.0;
+    let mut mem_status = MEMORYSTATUSEX {
+        dwLength: mem::size_of::<MEMORYSTATUSEX>() as u32,
+        ..Default::default()
+    };
+    // SAFETY: `mem_status` is a valid `MEMORYSTATUSEX`
+    unsafe { GlobalMemoryStatusEx(&mut mem_status).ok()? };
+
+    let used = mem_status.ullTotalPhys - mem_status.ullAvailPhys;
+    let total = mem_status.ullTotalPhys;
+    let percent = (used * 100) as f64 / total as f64;
+
     Ok(percent)
 }
 
