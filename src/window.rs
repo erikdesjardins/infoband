@@ -1,6 +1,6 @@
 use crate::constants::{
     FETCH_TIMER_MS, IDT_FETCH_TIMER, IDT_REDRAW_TIMER, REDRAW_TIMER_MS, UM_ENABLE_DEBUG_PAINT,
-    UM_INITIAL_PAINT,
+    UM_INITIAL_METRICS, UM_INITIAL_PAINT,
 };
 use crate::module;
 use crate::window::proc::window_proc;
@@ -94,6 +94,10 @@ pub fn create_and_run_message_loop(debug_paint: bool) -> Result<()> {
 
     // Enqueue a message for initial paint
     unsafe { PostMessageW(window, WM_USER, UM_INITIAL_PAINT, LPARAM(0)).ok()? };
+
+    // Enqueue a message for initial metrics fetch
+    // (This isn't necessary, but it's nice for debugging to have the metrics code run right away.)
+    unsafe { PostMessageW(window, WM_USER, UM_INITIAL_METRICS, LPARAM(0)).ok()? };
 
     // Set up timer to fetch metrics.
     // Note: this timer will be destroyed when the window is destroyed. (And in fact we can't destroy it manually, since the window handle will be invalid.)

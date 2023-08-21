@@ -72,6 +72,7 @@ pub const UNSCALED_WINDOW_WIDTH: i32 = 170;
 // User messages
 pub const UM_ENABLE_DEBUG_PAINT: WPARAM = WPARAM(1);
 pub const UM_INITIAL_PAINT: WPARAM = WPARAM(2);
+pub const UM_INITIAL_METRICS: WPARAM = WPARAM(3);
 
 // Timer ids
 pub const IDT_FETCH_TIMER: WPARAM = WPARAM(1);

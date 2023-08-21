@@ -1,5 +1,5 @@
 use crate::constants::{
-    IDT_FETCH_TIMER, IDT_REDRAW_TIMER, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_PAINT,
+    IDT_FETCH_TIMER, IDT_REDRAW_TIMER, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_METRICS, UM_INITIAL_PAINT,
 };
 use crate::utils::{ScaleBy, ScalingFactor};
 use crate::window::messages;
@@ -149,6 +149,11 @@ impl ProcHandler for InfoBand {
                     log::debug!("Starting paint (UM_INITIAL_PAINT)");
                     self.compute_size_and_position();
                     self.paint(window);
+                    LRESULT(0)
+                }
+                UM_INITIAL_METRICS => {
+                    log::debug!("Starting metrics fetch (UM_INITIAL_METRICS)");
+                    self.metrics.fetch();
                     LRESULT(0)
                 }
                 _ => {
