@@ -6,14 +6,17 @@ use std::mem;
 use std::ptr::addr_of_mut;
 use std::time::{Duration, Instant};
 use windows::core::Result;
-use windows::Win32::Foundation::WIN32_ERROR;
+use windows::Win32::Foundation::{FILETIME, WIN32_ERROR};
 use windows::Win32::NetworkManagement::IpHelper::{GetIfTable, MIB_IFROW, MIB_IFTABLE};
+use windows::Win32::System::Threading::GetSystemTimes;
 
 #[derive(Default)]
 pub struct Metrics {
     /// Timestamp of the last time metrics were fetched.
     prev_time: Cell<Option<Instant>>,
 
+    // Previous cumulative durations of CPU time.
+    prev_cpu_times: Cell<Option<(u64, u64, u64)>>,
     /// Samples of CPU usage as a percentage of total CPU time.
     cpu_percent: CircularBuffer<f64, SAMPLE_COUNT>,
 
@@ -42,7 +45,7 @@ impl Metrics {
         let prev_time = self.prev_time.replace(Some(cur_time));
         let time_delta = prev_time.map(|prev_time| cur_time - prev_time);
 
-        let cpu = fetch_cpu()?;
+        let cpu = fetch_cpu(&self.prev_cpu_times)?;
         let memory = fetch_memory()?;
         let disk = fetch_disk()?;
         let network = fetch_network(time_delta, &self.prev_network_byte_count)?;
@@ -84,9 +87,45 @@ impl Metrics {
     }
 }
 
-fn fetch_cpu() -> Result<f64> {
-    // TODO: implement
-    let percent = 0.0;
+fn fetch_cpu(prev_cpu_times: &Cell<Option<(u64, u64, u64)>>) -> Result<f64> {
+    let mut idle = FILETIME::default();
+    let mut kernel_plus_idle = FILETIME::default();
+    let mut user = FILETIME::default();
+    // SAFETY: all pointers are to valid `FILETIME`s
+    unsafe {
+        GetSystemTimes(
+            Some(&mut idle),
+            Some(&mut kernel_plus_idle),
+            Some(&mut user),
+        )
+        .ok()?
+    };
+
+    let to_100ns_intervals = |filetime: FILETIME| {
+        u64::from(filetime.dwHighDateTime) << 32 | u64::from(filetime.dwLowDateTime)
+    };
+
+    let cur_idle = to_100ns_intervals(idle);
+    let cur_kernel_plus_idle = to_100ns_intervals(kernel_plus_idle);
+    let cur_user = to_100ns_intervals(user);
+
+    // On first sample, just store the current times and return zero.
+    let percent = match prev_cpu_times.get() {
+        Some((prev_idle, prev_kernel_plus_idle, prev_user)) => {
+            let idle = cur_idle.wrapping_sub(prev_idle);
+            let kernel_plus_idle = cur_kernel_plus_idle.wrapping_sub(prev_kernel_plus_idle);
+            let user = cur_user.wrapping_sub(prev_user);
+
+            let time_delta = kernel_plus_idle + user;
+            let active_delta = time_delta - idle;
+
+            (active_delta * 100) as f64 / (time_delta as f64)
+        }
+        None => 0.0,
+    };
+
+    prev_cpu_times.set(Some((cur_idle, cur_kernel_plus_idle, cur_user)));
+
     Ok(percent)
 }
 
