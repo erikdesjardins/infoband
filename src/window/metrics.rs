@@ -11,7 +11,8 @@ use windows::Win32::NetworkManagement::IpHelper::{GetIfTable, MIB_IFROW, MIB_IFT
 use windows::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
 use windows::Win32::System::Threading::GetSystemTimes;
 
-#[derive(Default)]
+mod disk;
+
 pub struct Metrics {
     /// Timestamp of the last time metrics were fetched.
     prev_time: Cell<Option<Instant>>,
@@ -24,16 +25,30 @@ pub struct Metrics {
     /// Samples of memory usage as a percentage of total memory.
     memory_percent: CircularBuffer<f64, SAMPLE_COUNT>,
 
+    disk: disk::State,
     /// Samples of disk bandwidth in megabytes per second.
     disk_mbyte: CircularBuffer<f64, SAMPLE_COUNT>,
 
-    /// Count of total bytes transferred from the previous fetch.
+    /// Count of network bytes transferred at the time of the previous fetch.
     prev_network_byte_count: Cell<u64>,
     /// Samples of network bandwidth in megabits per second.
     network_mbit: CircularBuffer<f64, SAMPLE_COUNT>,
 }
 
 impl Metrics {
+    pub fn new() -> Result<Self> {
+        Ok(Self {
+            prev_time: Default::default(),
+            prev_cpu_times: Default::default(),
+            cpu_percent: Default::default(),
+            memory_percent: Default::default(),
+            disk: disk::State::new()?,
+            disk_mbyte: Default::default(),
+            prev_network_byte_count: Default::default(),
+            network_mbit: Default::default(),
+        })
+    }
+
     #[inline(never)]
     pub fn fetch(&self) {
         if let Err(e) = self.fetch_fallible() {
@@ -48,7 +63,7 @@ impl Metrics {
 
         let cpu = fetch_cpu(&self.prev_cpu_times)?;
         let memory = fetch_memory()?;
-        let disk = fetch_disk()?;
+        let disk = self.disk.fetch_mbyte(time_delta)?;
         let network = fetch_network(time_delta, &self.prev_network_byte_count)?;
 
         log::debug!(
@@ -143,12 +158,6 @@ fn fetch_memory() -> Result<f64> {
     let percent = (used * 100) as f64 / total as f64;
 
     Ok(percent)
-}
-
-fn fetch_disk() -> Result<f64> {
-    // TODO: implement
-    let mbyte = 0.0;
-    Ok(mbyte)
 }
 
 fn fetch_network(time_delta: Option<Duration>, prev_network_byte_count: &Cell<u64>) -> Result<f64> {

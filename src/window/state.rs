@@ -3,6 +3,7 @@ use crate::constants::{
 };
 use crate::utils::{ScaleBy, ScalingFactor};
 use crate::window::messages;
+use crate::window::metrics::Metrics;
 use crate::window::proc::ProcHandler;
 use std::cell::Cell;
 use windows::core::Result;
@@ -13,8 +14,6 @@ use windows::Win32::UI::WindowsAndMessaging::{
     PostQuitMessage, USER_DEFAULT_SCREEN_DPI, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED,
     WM_ERASEBKGND, WM_NCCALCSIZE, WM_NCPAINT, WM_PAINT, WM_TIMER, WM_USER,
 };
-
-use super::metrics::Metrics;
 
 pub struct InfoBand {
     /// SAFETY: must only be provided after calling `BufferedPaintInit`.
@@ -50,7 +49,7 @@ impl ProcHandler for InfoBand {
         let size = SIZE { cx: 0, cy: 0 };
         let position = POINT { x: 0, y: 0 };
 
-        let metrics = Metrics::default();
+        let metrics = Metrics::new()?;
 
         Ok(Self {
             debug_paint: Cell::new(false),
