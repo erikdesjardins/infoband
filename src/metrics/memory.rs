@@ -12,7 +12,7 @@ impl State {
             ..Default::default()
         };
         // SAFETY: `mem_status` is a valid `MEMORYSTATUSEX`
-        unsafe { GlobalMemoryStatusEx(&mut mem_status).ok()? };
+        unsafe { GlobalMemoryStatusEx(&mut mem_status)? };
 
         let used = mem_status.ullTotalPhys - mem_status.ullAvailPhys;
         let total = mem_status.ullTotalPhys;

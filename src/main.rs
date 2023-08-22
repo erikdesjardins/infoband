@@ -15,7 +15,7 @@ use log4rs::encode::pattern::PatternEncoder;
 use log4rs::Config;
 use std::env;
 use windows::core::Error;
-use windows::Win32::Foundation::HMODULE;
+use windows::Win32::Foundation::HINSTANCE;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 
 mod macros;
@@ -69,7 +69,8 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
-fn get_module_handle() -> Result<HMODULE, Error> {
+fn get_module_handle() -> Result<HINSTANCE, Error> {
     // SAFETY: no safety requirements when passing null
-    unsafe { GetModuleHandleW(None) }
+    let module = unsafe { GetModuleHandleW(None)? };
+    Ok(HINSTANCE::from(module))
 }

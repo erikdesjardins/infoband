@@ -8,8 +8,7 @@ use crate::utils::{RectExt, ScaleBy, ScalingFactor};
 use std::cell::Cell;
 use std::mem;
 use std::ptr;
-use windows::core::{Error, Result};
-use windows::w;
+use windows::core::{w, Error, Result};
 use windows::Win32::Foundation::{COLORREF, ERROR_FILE_NOT_FOUND, HWND, POINT, RECT, SIZE};
 use windows::Win32::Graphics::Gdi::{
     GetDC, GetMonitorInfoW, MonitorFromPoint, ReleaseDC, AC_SRC_ALPHA, AC_SRC_OVER, BLENDFUNCTION,
@@ -226,8 +225,7 @@ impl Paint {
                     ..Default::default()
                 }),
                 ULW_ALPHA,
-            )
-            .ok()?
+            )?
         };
 
         Ok(())

@@ -19,8 +19,7 @@ impl State {
                 Some(&mut idle),
                 Some(&mut kernel_plus_idle),
                 Some(&mut user),
-            )
-            .ok()?
+            )?
         };
 
         let to_100ns_intervals = |filetime: FILETIME| {

@@ -8,7 +8,7 @@ argh = "0.1"
 log4rs = { version = "1.0", features = ["console_appender", "file_appender"] }
 log = "0.4"
 memoffset = "0.9"
-windows = { version = "0.48", features = [
+windows = { version = "0.51", features = [
     "implement",
     "Win32_Foundation",
     "Win32_Graphics_Gdi",

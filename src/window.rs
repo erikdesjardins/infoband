@@ -3,9 +3,8 @@ use crate::constants::{
     UM_INITIAL_METRICS, UM_INITIAL_PAINT,
 };
 use crate::window::proc::window_proc;
-use windows::core::{Error, Result, HRESULT, HSTRING};
-use windows::w;
-use windows::Win32::Foundation::{HMODULE, LPARAM};
+use windows::core::{w, Error, Result, HRESULT, HSTRING};
+use windows::Win32::Foundation::{HINSTANCE, LPARAM};
 use windows::Win32::UI::HiDpi::{
     SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
 };
@@ -25,13 +24,13 @@ mod state;
 /// Must be called before any other windowing functions.
 pub fn make_process_dpi_aware() -> Result<()> {
     // SAFETY: not unsafe...
-    unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2).ok()? };
+    unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)? };
 
     Ok(())
 }
 
 /// Create the toplevel window, start timers for updating it, and pump the windows message loop.
-pub fn create_and_run_message_loop(instance: HMODULE, debug_paint: bool) -> Result<()> {
+pub fn create_and_run_message_loop(instance: HINSTANCE, debug_paint: bool) -> Result<()> {
     // SAFETY: using predefined system cursor, so instance handle is unused; IDC_ARROW is guaranteed to exist
     let cursor = unsafe { LoadCursorW(None, IDC_ARROW)? };
 
@@ -85,15 +84,15 @@ pub fn create_and_run_message_loop(instance: HMODULE, debug_paint: bool) -> Resu
 
     // Enqueue a message to tell the window about debug settings
     if debug_paint {
-        unsafe { PostMessageW(window, WM_USER, UM_ENABLE_DEBUG_PAINT, LPARAM(0)).ok()? };
+        unsafe { PostMessageW(window, WM_USER, UM_ENABLE_DEBUG_PAINT, LPARAM(0))? };
     }
 
     // Enqueue a message for initial paint
-    unsafe { PostMessageW(window, WM_USER, UM_INITIAL_PAINT, LPARAM(0)).ok()? };
+    unsafe { PostMessageW(window, WM_USER, UM_INITIAL_PAINT, LPARAM(0))? };
 
     // Enqueue a message for initial metrics fetch
     // (This isn't necessary, but it's nice for debugging to have the metrics code run right away.)
-    unsafe { PostMessageW(window, WM_USER, UM_INITIAL_METRICS, LPARAM(0)).ok()? };
+    unsafe { PostMessageW(window, WM_USER, UM_INITIAL_METRICS, LPARAM(0))? };
 
     // Set up timer to fetch metrics.
     // Note: this timer will be destroyed when the window is destroyed. (And in fact we can't destroy it manually, since the window handle will be invalid.)

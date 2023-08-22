@@ -6,8 +6,8 @@ use windows::core::{Result, GUID};
 use windows::Win32::Foundation::{HANDLE, WIN32_ERROR};
 use windows::Win32::System::Performance::{
     PerfAddCounters, PerfCloseQueryHandle, PerfOpenQueryHandle, PerfQueryCounterData,
-    PerfQueryHandle, PERF_COUNTER_DATA, PERF_COUNTER_HEADER, PERF_COUNTER_IDENTIFIER,
-    PERF_DATA_HEADER, PERF_SINGLE_COUNTER, PERF_WILDCARD_COUNTER,
+    PERF_COUNTER_DATA, PERF_COUNTER_HEADER, PERF_COUNTER_IDENTIFIER, PERF_DATA_HEADER,
+    PERF_SINGLE_COUNTER, PERF_WILDCARD_COUNTER,
 };
 
 // Should be the counterset ID of "FileSystem Disk Activity", aka {F596750D-B109-4247-A62F-DEA47A46E505}.
@@ -26,7 +26,7 @@ const FILESYSTEM_BYTES_WRITTEN_COUNTER: u32 = 1;
 pub struct State {
     // Handle holding perf query.
     // SAFETY: must not be modified or dropped until this struct is dropped.
-    handle: PerfQueryHandle,
+    handle: HANDLE,
 
     // Previous count of total bytes transferred.
     prev_byte_count: Cell<u64>,
@@ -35,7 +35,7 @@ pub struct State {
 impl Drop for State {
     fn drop(&mut self) {
         // SAFETY: handle is valid and hasn't been closed due to our safety invariant.
-        if let Err(e) = unsafe { WIN32_ERROR(PerfCloseQueryHandle(HANDLE(self.handle.0))).ok() } {
+        if let Err(e) = unsafe { WIN32_ERROR(PerfCloseQueryHandle(self.handle)).ok() } {
             log::error!("Failed to close PerfQueryHandle: {}", e);
         }
     }
@@ -46,7 +46,7 @@ impl State {
         // Create handle to hold counters which we will repeatedly query.
 
         let handle = {
-            let mut handle = PerfQueryHandle::default();
+            let mut handle = HANDLE::default();
             // SAFETY: handle is a valid pointer to PerfQueryHandle
             unsafe { WIN32_ERROR(PerfOpenQueryHandle(None, &mut handle)).ok()? };
             handle
