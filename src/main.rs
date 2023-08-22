@@ -15,12 +15,13 @@ use log4rs::encode::pattern::PatternEncoder;
 use log4rs::Config;
 use std::env;
 use windows::core::Error;
+use windows::Win32::Foundation::HMODULE;
+use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 
 mod macros;
 
 mod constants;
 mod metrics;
-mod module;
 mod opt;
 mod stats;
 mod utils;
@@ -59,9 +60,16 @@ fn main() -> Result<(), Error> {
     )
     .unwrap();
 
+    let instance = get_module_handle()?;
+
     window::make_process_dpi_aware()?;
 
-    window::create_and_run_message_loop(debug_paint)?;
+    window::create_and_run_message_loop(instance, debug_paint)?;
 
     Ok(())
+}
+
+fn get_module_handle() -> Result<HMODULE, Error> {
+    // SAFETY: no safety requirements when passing null
+    unsafe { GetModuleHandleW(None) }
 }

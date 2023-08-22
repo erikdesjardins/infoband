@@ -2,11 +2,10 @@ use crate::constants::{
     FETCH_TIMER_MS, IDT_FETCH_TIMER, IDT_REDRAW_TIMER, REDRAW_TIMER_MS, UM_ENABLE_DEBUG_PAINT,
     UM_INITIAL_METRICS, UM_INITIAL_PAINT,
 };
-use crate::module;
 use crate::window::proc::window_proc;
 use windows::core::{Error, Result, HRESULT, HSTRING};
 use windows::w;
-use windows::Win32::Foundation::LPARAM;
+use windows::Win32::Foundation::{LPARAM, HMODULE};
 use windows::Win32::UI::HiDpi::{
     SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
 };
@@ -32,9 +31,7 @@ pub fn make_process_dpi_aware() -> Result<()> {
 }
 
 /// Create the toplevel window, start timers for updating it, and pump the windows message loop.
-pub fn create_and_run_message_loop(debug_paint: bool) -> Result<()> {
-    let instance = module::get_handle();
-
+pub fn create_and_run_message_loop(instance: HMODULE, debug_paint: bool) -> Result<()> {
     // SAFETY: using predefined system cursor, so instance handle is unused; IDC_ARROW is guaranteed to exist
     let cursor = unsafe { LoadCursorW(None, IDC_ARROW)? };
 
