@@ -1,12 +1,27 @@
 [package]
 name = "infoband"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 
-[lib]
-crate-type = ["cdylib"]
-
 [dependencies]
+argh = "0.1"
+log4rs = { version = "1.0", features = ["console_appender", "file_appender"] }
+log = "0.4"
+memoffset = "0.9"
+windows = { version = "0.51", features = [
+    "implement",
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_System_DataExchange",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Performance",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+    "Win32_UI_Controls",
+    "Win32_UI_HiDpi",
+    "Win32_UI_WindowsAndMessaging",
+] }
 
 [profile.release]
 panic = "abort"
