@@ -19,6 +19,7 @@ use windows::core::Error;
 mod macros;
 
 mod constants;
+mod metrics;
 mod module;
 mod opt;
 mod stats;

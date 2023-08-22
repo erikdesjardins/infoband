@@ -1,9 +1,9 @@
 use crate::constants::{
     IDT_FETCH_TIMER, IDT_REDRAW_TIMER, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_METRICS, UM_INITIAL_PAINT,
 };
+use crate::metrics::Metrics;
 use crate::utils::{ScaleBy, ScalingFactor};
 use crate::window::messages;
-use crate::window::metrics::Metrics;
 use crate::window::proc::ProcHandler;
 use std::cell::Cell;
 use windows::core::Result;

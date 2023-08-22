@@ -18,7 +18,6 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 mod messages;
-mod metrics;
 mod paint;
 mod proc;
 mod state;
