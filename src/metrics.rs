@@ -63,7 +63,7 @@ impl Metrics {
         let disk = self.disk.fetch_mbyte(time_delta)?;
         let network = self.network.fetch_mbit(time_delta)?;
 
-        log::debug!(
+        log::trace!(
             "Fetched samples: cpu={:.3} memory={:.3} disk={:.3} network={:.3}",
             cpu,
             memory,

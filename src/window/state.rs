@@ -129,12 +129,12 @@ impl ProcHandler for InfoBand {
             },
             WM_TIMER => match wparam {
                 IDT_FETCH_TIMER => {
-                    log::debug!("Fetching metrics (IDT_FETCH_TIMER)");
+                    log::trace!("Fetching metrics (IDT_FETCH_TIMER)");
                     self.metrics.fetch();
                     LRESULT(0)
                 }
                 IDT_REDRAW_TIMER => {
-                    log::debug!("Starting repaint (IDT_REDRAW_TIMER)");
+                    log::trace!("Starting repaint (IDT_REDRAW_TIMER)");
                     self.paint.render(window, &self.metrics);
                     LRESULT(0)
                 }
@@ -148,7 +148,7 @@ impl ProcHandler for InfoBand {
                 }
             },
             _ => {
-                log::trace!(
+                log::debug!(
                     "Default window proc ({} wparam=0x{:08x} lparam=0x{:012x})",
                     messages::Name(message),
                     wparam.0,
