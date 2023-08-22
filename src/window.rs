@@ -5,7 +5,7 @@ use crate::constants::{
 use crate::window::proc::window_proc;
 use windows::core::{Error, Result, HRESULT, HSTRING};
 use windows::w;
-use windows::Win32::Foundation::{LPARAM, HMODULE};
+use windows::Win32::Foundation::{HMODULE, LPARAM};
 use windows::Win32::UI::HiDpi::{
     SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
 };

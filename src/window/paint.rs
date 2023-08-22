@@ -3,28 +3,83 @@ use crate::constants::{
     UNSCALED_SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP, UNSCALED_WINDOW_WIDTH,
 };
 use crate::defer;
-use crate::utils::{RectExt, ScaleBy};
-use crate::window::state::InfoBand;
+use crate::metrics::Metrics;
+use crate::utils::{RectExt, ScaleBy, ScalingFactor};
+use std::cell::Cell;
 use std::mem;
-use std::ptr::{self};
+use std::ptr;
 use windows::core::{Error, Result};
 use windows::w;
-use windows::Win32::Foundation::{COLORREF, ERROR_FILE_NOT_FOUND, HWND, POINT, RECT};
+use windows::Win32::Foundation::{COLORREF, ERROR_FILE_NOT_FOUND, HWND, POINT, RECT, SIZE};
 use windows::Win32::Graphics::Gdi::{
     GetDC, GetMonitorInfoW, MonitorFromPoint, ReleaseDC, AC_SRC_ALPHA, AC_SRC_OVER, BLENDFUNCTION,
     DT_NOCLIP, DT_NOPREFIX, DT_SINGLELINE, HDC, MONITORINFO, MONITOR_DEFAULTTOPRIMARY, RGBQUAD,
 };
 use windows::Win32::UI::Controls::{
-    BeginBufferedPaint, CloseThemeData, DrawThemeTextEx, EndBufferedPaint, GetBufferedPaintBits,
-    GetThemeTextExtent, BPBF_TOPDOWNDIB, BPPF_NOCLIP, BP_PAINTPARAMS, DTTOPTS, DTT_COMPOSITED,
-    DTT_TEXTCOLOR, HTHEME, TEXT_BODYTEXT,
+    BeginBufferedPaint, BufferedPaintInit, BufferedPaintUnInit, CloseThemeData, DrawThemeTextEx,
+    EndBufferedPaint, GetBufferedPaintBits, GetThemeTextExtent, BPBF_TOPDOWNDIB, BPPF_NOCLIP,
+    BP_PAINTPARAMS, DTTOPTS, DTT_COMPOSITED, DTT_TEXTCOLOR, HTHEME, TEXT_BODYTEXT,
 };
-use windows::Win32::UI::HiDpi::OpenThemeDataForDpi;
+use windows::Win32::UI::HiDpi::{GetDpiForWindow, OpenThemeDataForDpi};
 use windows::Win32::UI::WindowsAndMessaging::{
     UpdateLayeredWindow, ULW_ALPHA, USER_DEFAULT_SCREEN_DPI,
 };
 
-impl InfoBand {
+pub struct Paint {
+    /// SAFETY: must only be provided after calling `BufferedPaintInit`.
+    called_buffered_paint_init: (),
+    /// Whether to make the window more visible for debugging.
+    pub debug: Cell<bool>,
+    /// DPI scaling factor of the window.
+    pub dpi: Cell<ScalingFactor>,
+    /// Size of the window.
+    pub size: Cell<SIZE>,
+    /// Position of the window.
+    pub position: Cell<POINT>,
+}
+
+impl Drop for Paint {
+    fn drop(&mut self) {
+        _ = self.called_buffered_paint_init;
+        // SAFETY: init and uninit must be called in pairs; we call init when constructing this type
+        if let Err(e) = unsafe { BufferedPaintUnInit() } {
+            log::error!("BufferedPaintUnInit failed: {}", e);
+        }
+    }
+}
+
+impl Paint {
+    pub fn new(window: HWND) -> Result<Self> {
+        let dpi = unsafe { GetDpiForWindow(window) };
+        let dpi = ScalingFactor::from_ratio(dpi, USER_DEFAULT_SCREEN_DPI);
+
+        // Window starts out not displayed, with size and position zero.
+        let size = SIZE { cx: 0, cy: 0 };
+        let position = POINT { x: 0, y: 0 };
+
+        Ok(Self {
+            debug: Cell::new(false),
+            dpi: Cell::new(dpi),
+            size: Cell::new(size),
+            position: Cell::new(position),
+            called_buffered_paint_init: {
+                // SAFETY: init and uninit must be called in pairs; after this point, we construct self, so drop will call uninit
+                unsafe { BufferedPaintInit()? }
+            },
+            // ...DO NOT add more fields after this...
+        })
+    }
+
+    pub fn set_debug(&self, debug: bool) {
+        self.debug.set(debug);
+    }
+
+    pub fn set_dpi(&self, dpi: u32) -> ScalingFactor {
+        let dpi = ScalingFactor::from_ratio(dpi, USER_DEFAULT_SCREEN_DPI);
+        self.dpi.set(dpi);
+        dpi
+    }
+
     pub fn compute_size_and_position(&self) {
         if let Err(e) = self.compute_size_and_position_fallible() {
             log::error!("Update window position failed: {}", e);
@@ -70,15 +125,15 @@ impl InfoBand {
     }
 
     /// Paint the window using the window's device context.
-    pub fn paint(&self, window: HWND) {
-        if let Err(e) = self.paint_fallible(window) {
+    pub fn render(&self, window: HWND, metrics: &Metrics) {
+        if let Err(e) = self.render_fallible(window, metrics) {
             log::error!("Paint failed: {}", e);
         }
     }
 
     /// Toplevel paint method, responsible for dealing with paint buffering and updating the window,
     /// but not with drawing any content.
-    fn paint_fallible(&self, window: HWND) -> Result<()> {
+    fn render_fallible(&self, window: HWND, metrics: &Metrics) -> Result<()> {
         let size = self.size.get();
         let position = self.position.get();
 
@@ -123,7 +178,7 @@ impl InfoBand {
 
         // When debugging is enabled, fill in window background.
         // We have to do this manually because GDI brushes don't support alpha.
-        if self.debug_paint.get() {
+        if self.debug.get() {
             // Get the bits from the temporary mem HDC, along with the real width of each row (which may be larger than required).
             let mut bits = ptr::null_mut();
             let mut cx_row = 0;
@@ -152,7 +207,7 @@ impl InfoBand {
         }
 
         // ...draw the content...
-        self.draw_content(hdc)?;
+        self.draw_content(hdc, metrics)?;
 
         // ...and then write the temporary mem HDC to the window, with alpha blending.
         unsafe {
@@ -179,7 +234,7 @@ impl InfoBand {
     }
 
     /// Draw the window content to the given device context.
-    fn draw_content(&self, hdc: HDC) -> Result<()> {
+    fn draw_content(&self, hdc: HDC, metrics: &Metrics) -> Result<()> {
         let dpi = self.dpi.get();
         let size = self.size.get();
 
@@ -198,7 +253,7 @@ impl InfoBand {
         let right_midpoint_at =
             |x, y| move |r: RECT| r.with_right_edge_at(x).with_vertical_midpoint_at(y);
 
-        let cpu = self.metrics.avg_cpu_percent();
+        let cpu = metrics.avg_cpu_percent();
         draw_text(
             hdc,
             text_style,
@@ -209,7 +264,7 @@ impl InfoBand {
             ),
         )?;
 
-        let mem = self.metrics.avg_memory_percent();
+        let mem = metrics.avg_memory_percent();
         draw_text(
             hdc,
             text_style,
@@ -220,7 +275,7 @@ impl InfoBand {
             ),
         )?;
 
-        let dsk = self.metrics.avg_disk_mbyte();
+        let dsk = metrics.avg_disk_mbyte();
         draw_text(
             hdc,
             text_style,
@@ -231,7 +286,7 @@ impl InfoBand {
             ),
         )?;
 
-        let net = self.metrics.avg_network_mbit();
+        let net = metrics.avg_network_mbit();
         draw_text(
             hdc,
             text_style,
