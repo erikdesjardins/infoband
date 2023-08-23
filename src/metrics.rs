@@ -54,9 +54,9 @@ impl Metrics {
     }
 
     fn fetch_fallible(&self) -> Result<()> {
-        let cur_time = Instant::now();
-        let prev_time = self.prev_time.replace(Some(cur_time));
-        let time_delta = prev_time.map(|prev_time| cur_time - prev_time);
+        let time = Instant::now();
+        let prev_time = self.prev_time.replace(Some(time));
+        let time_delta = prev_time.map(|prev_time| time - prev_time);
 
         let cpu = self.cpu.fetch_percent()?;
         let memory = self.memory.fetch_percent()?;
