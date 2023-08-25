@@ -1,30 +1,46 @@
 use crate::constants::{
-    IDT_FETCH_TIMER, IDT_REDRAW_TIMER, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_METRICS, UM_INITIAL_PAINT,
+    HSHELL_RUDEAPPACTIVATED, HSHELL_WINDOWACTIVATED, IDT_FETCH_TIMER, IDT_REDRAW_TIMER,
+    IDT_Z_ORDER_TIMER, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_METRICS, UM_INITIAL_PAINT,
+    UM_INITIAL_Z_ORDER,
 };
 use crate::metrics::Metrics;
 use crate::utils::ScaleBy;
 use crate::window::messages;
+use crate::window::paint::Paint;
 use crate::window::proc::ProcHandler;
-use windows::core::Result;
+use crate::window::z_order::ZOrder;
+use windows::core::{w, Error, Result};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
-    PostQuitMessage, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_ERASEBKGND, WM_NCCALCSIZE,
-    WM_NCPAINT, WM_PAINT, WM_TIMER, WM_USER,
+    PostQuitMessage, RegisterWindowMessageW, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED,
+    WM_ERASEBKGND, WM_NCCALCSIZE, WM_NCPAINT, WM_PAINT, WM_TIMER, WM_USER,
 };
 
-use super::paint::Paint;
-
 pub struct InfoBand {
+    /// The message ID of the SHELLHOOK message.
+    shellhook_message: u32,
     /// Paint state.
-    pub paint: Paint,
+    paint: Paint,
+    /// Z=order state.
+    z_order: ZOrder,
     /// Performance metrics.
-    pub metrics: Metrics,
+    metrics: Metrics,
 }
 
 impl ProcHandler for InfoBand {
     fn new(window: HWND) -> Result<Self> {
+        let shellhook_message = {
+            let res = unsafe { RegisterWindowMessageW(w!("SHELLHOOK")) };
+            if res == 0 {
+                return Err(Error::from_win32());
+            }
+            res
+        };
+
         Ok(Self {
+            shellhook_message,
             paint: Paint::new(window)?,
+            z_order: ZOrder::new()?,
             metrics: Metrics::new()?,
         })
     }
@@ -107,15 +123,21 @@ impl ProcHandler for InfoBand {
                     self.paint.set_debug(true);
                     LRESULT(0)
                 }
-                UM_INITIAL_PAINT => {
-                    log::debug!("Starting paint (UM_INITIAL_PAINT)");
-                    self.paint.compute_size_and_position();
-                    self.paint.render(window, &self.metrics);
+                UM_INITIAL_METRICS => {
+                    log::debug!("Initial metrics fetch (UM_INITIAL_METRICS)");
+                    self.metrics.fetch();
                     LRESULT(0)
                 }
-                UM_INITIAL_METRICS => {
-                    log::debug!("Starting metrics fetch (UM_INITIAL_METRICS)");
-                    self.metrics.fetch();
+                UM_INITIAL_Z_ORDER => {
+                    log::debug!("Initial z-order update (UM_INITIAL_Z_ORDER)");
+                    self.z_order.touch_window(window);
+                    self.z_order.update(window);
+                    LRESULT(0)
+                }
+                UM_INITIAL_PAINT => {
+                    log::debug!("Initial paint (UM_INITIAL_PAINT)");
+                    self.paint.compute_size_and_position();
+                    self.paint.render(window, &self.metrics);
                     LRESULT(0)
                 }
                 _ => {
@@ -127,6 +149,27 @@ impl ProcHandler for InfoBand {
                     return None;
                 }
             },
+            _ if message == self.shellhook_message => match wparam {
+                // Per https://github.com/dechamps/RudeWindowFixer#the-rude-window-manager,
+                // these are the messages that the shell uses to update its z-order.
+                HSHELL_WINDOWACTIVATED | HSHELL_RUDEAPPACTIVATED | WPARAM(0x35) | WPARAM(0x36) => {
+                    log::debug!(
+                        "Queuing z-order check (SHELLHOOK id=0x{:08x} lparam=0x{:012x})",
+                        wparam.0,
+                        lparam.0
+                    );
+                    self.z_order.queue_update(window);
+                    LRESULT(0)
+                }
+                _ => {
+                    log::trace!(
+                        "Ignoring shellhook message (SHELLHOOK id=0x{:08x} lparam=0x{:012x})",
+                        wparam.0,
+                        lparam.0
+                    );
+                    LRESULT(0)
+                }
+            },
             WM_TIMER => match wparam {
                 IDT_FETCH_TIMER => {
                     log::trace!("Fetching metrics (IDT_FETCH_TIMER)");
@@ -136,6 +179,12 @@ impl ProcHandler for InfoBand {
                 IDT_REDRAW_TIMER => {
                     log::trace!("Starting repaint (IDT_REDRAW_TIMER)");
                     self.paint.render(window, &self.metrics);
+                    LRESULT(0)
+                }
+                IDT_Z_ORDER_TIMER => {
+                    log::debug!("Rechecking z-order (IDT_Z_ORDER_TIMER)",);
+                    self.z_order.kill_timer(window);
+                    self.z_order.update(window);
                     LRESULT(0)
                 }
                 _ => {

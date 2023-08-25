@@ -1,4 +1,5 @@
 use windows::Win32::Foundation::WPARAM;
+use windows::Win32::UI::WindowsAndMessaging::TIMERV_DEFAULT_COALESCING;
 
 // Sizing and positioning
 //
@@ -71,17 +72,29 @@ pub const UNSCALED_WINDOW_WIDTH: i32 = 170;
 
 // User messages
 pub const UM_ENABLE_DEBUG_PAINT: WPARAM = WPARAM(1);
-pub const UM_INITIAL_PAINT: WPARAM = WPARAM(2);
-pub const UM_INITIAL_METRICS: WPARAM = WPARAM(3);
+pub const UM_INITIAL_METRICS: WPARAM = WPARAM(2);
+pub const UM_INITIAL_Z_ORDER: WPARAM = WPARAM(3);
+pub const UM_INITIAL_PAINT: WPARAM = WPARAM(4);
 
 // Timer ids
 pub const IDT_FETCH_TIMER: WPARAM = WPARAM(1);
 pub const IDT_REDRAW_TIMER: WPARAM = WPARAM(2);
+pub const IDT_Z_ORDER_TIMER: WPARAM = WPARAM(3);
 
 // Timer intervals
 pub const FETCH_TIMER_MS: u32 = 1000;
 pub const REDRAW_TIMER_MS: u32 = 5 * 1000;
+pub const Z_ORDER_TIMER_MS: u32 = 50;
+
+// Timer coalescing delays
+pub const FETCH_TIMER_COALESCE: u32 = 1000;
+pub const REDRAW_TIMER_COALESCE: u32 = 1000;
+pub const Z_ORDER_TIMER_COALESCE: u32 = TIMERV_DEFAULT_COALESCING; // usually something short like 32ms
 
 // Metrics
 pub const SAMPLE_COUNT: usize = 8;
 pub const EXPONENTIAL_DECAY_ALPHA: f64 = 0.631; // 0.631^5 = 0.1, so 90% of the weight is for the last 5 samples
+
+// Shell hook messages
+pub const HSHELL_WINDOWACTIVATED: WPARAM = WPARAM(0x4);
+pub const HSHELL_RUDEAPPACTIVATED: WPARAM = WPARAM(0x8004);
