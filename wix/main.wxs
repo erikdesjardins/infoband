@@ -121,7 +121,6 @@
                 <Shortcut Id="ApplicationStartupShortcut"
                           Name="infoband"
                           Target="[!exe0]"
-                          Arguments="--noninteractive"
                           WorkingDirectory="Bin"/>
                 <RegistryValue Root="HKCU" Key="Software\erikdesjardins\infoband" Name="installed" Type="integer" Value="1" KeyPath="yes"/>
               </Component>
@@ -203,7 +202,7 @@
         <CustomAction
             Id="LaunchApplication"
             FileKey="exe0"
-            ExeCommand="--noninteractive -v"
+            ExeCommand=""
             Return="asyncNoWait"
             Impersonate="yes"/>
 

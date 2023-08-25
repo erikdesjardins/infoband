@@ -6,6 +6,8 @@
     clippy::if_same_then_else
 )]
 #![deny(unsafe_op_in_unsafe_fn)]
+// Prevent the automatic console window you get on startup.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use log::LevelFilter;
 use log4rs::append::console::{ConsoleAppender, Target};
@@ -30,7 +32,6 @@ mod window;
 fn main() -> Result<(), Error> {
     let opt::Options {
         verbose,
-        noninteractive,
         debug_paint,
     } = argh::from_env();
 
@@ -38,7 +39,7 @@ fn main() -> Result<(), Error> {
         Config::builder()
             .appender(Appender::builder().build("default", {
                 let encoder = Box::new(PatternEncoder::new("[{date(%Y-%m-%d %H:%M:%S%.3f)} {highlight({level}):5} {target}] {highlight({message})}{n}"));
-                if noninteractive {
+                if !cfg!(debug_assertions) {
                     let mut path = env::current_exe().unwrap();
                     path.set_file_name("infoband.log");
                     Box::new(FileAppender::builder().build(path).unwrap())
