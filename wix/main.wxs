@@ -75,7 +75,7 @@
             InstallerVersion='450'
             Languages='1033'
             Compressed='yes'
-            InstallScope='perUser'
+            InstallScope='perMachine'
             SummaryCodepage='1252'
             />
 
@@ -197,7 +197,7 @@
           Add a checkbox to the last screen to launch the installed application.
         -->
         <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
-        <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch infoband now" />
+        <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch now" />
         <Property Id="WixShellExecTarget" Value="[!exe0]" />
         <CustomAction
             Id="LaunchApplication"
