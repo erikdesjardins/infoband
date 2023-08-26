@@ -68,8 +68,15 @@ use windows::Win32::UI::WindowsAndMessaging::TIMERV_DEFAULT_COALESCING;
 //  v     v      v
 pub const FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP: Unscaled<i32> = Unscaled::new(15);
 pub const SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP: Unscaled<i32> = Unscaled::new(31);
+pub const LABEL_WIDTH: Unscaled<i32> = Unscaled::new(31);
+pub const RIGHT_COLUMN_WIDTH: Unscaled<i32> = Unscaled::new(*LABEL_WIDTH.as_inner() + 38);
 pub const WINDOW_WIDTH: Unscaled<i32> = Unscaled::new(170);
-pub const DEFAULT_OFFSET_FROM_RIGHT: Unscaled<i32> = Unscaled::new(375);
+pub const DEFAULT_OFFSET_FROM_RIGHT: Unscaled<i32> = if cfg!(debug_assertions) {
+    // Shift over when debugging so it's easy to compare with the installed version
+    Unscaled::new(575)
+} else {
+    Unscaled::new(375)
+};
 
 // File names
 pub const LOG_FILE_NAME: &str = "infoband.log";

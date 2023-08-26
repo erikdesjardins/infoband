@@ -171,6 +171,10 @@ where
     pub fn into_inner(self) -> T {
         self.0
     }
+
+    pub const fn as_inner(&self) -> &T {
+        &self.0
+    }
 }
 
 impl Display for Unscaled<i32> {

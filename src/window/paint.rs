@@ -1,5 +1,6 @@
 use crate::constants::{
-    FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP, SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP, WINDOW_WIDTH,
+    FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP, LABEL_WIDTH, RIGHT_COLUMN_WIDTH,
+    SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP, WINDOW_WIDTH,
 };
 use crate::defer;
 use crate::metrics::Metrics;
@@ -257,45 +258,48 @@ impl Paint {
             }
         }
 
+        let cpu = metrics.avg_cpu_percent();
+        let mem = metrics.avg_memory_percent();
+        let net = metrics.avg_network_mbit();
+        let dsk = metrics.avg_disk_mbyte();
+
         let right_midpoint_at =
             |x, y| move |r: RECT| r.with_right_edge_at(x).with_vertical_midpoint_at(y);
 
-        let cpu = metrics.avg_cpu_percent();
-        draw_text(
-            hdc,
-            text_style,
-            &format!("{:.1}% CPU", cpu),
-            right_midpoint_at(
-                size.cx - WINDOW_WIDTH.scale_by(dpi) / 2,
-                FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi),
-            ),
-        )?;
+        let text = |text: &str, x, y| draw_text(hdc, text_style, text, right_midpoint_at(x, y));
 
-        let mem = metrics.avg_memory_percent();
-        draw_text(
-            hdc,
-            text_style,
-            &format!("{:.1}% MEM", mem),
-            right_midpoint_at(size.cx, FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi)),
-        )?;
+        let right_column = size.cx;
+        let left_column = right_column - RIGHT_COLUMN_WIDTH.scale_by(dpi);
 
-        let dsk = metrics.avg_disk_mbyte();
-        draw_text(
-            hdc,
-            text_style,
-            &format!("{:.1}MB/s DSK", dsk),
-            right_midpoint_at(
-                size.cx - WINDOW_WIDTH.scale_by(dpi) / 2,
-                SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi),
-            ),
-        )?;
+        let label_width = LABEL_WIDTH.scale_by(dpi);
 
-        let net = metrics.avg_network_mbit();
-        draw_text(
-            hdc,
-            text_style,
-            &format!("{:.1}Mb/s NET", net),
-            right_midpoint_at(size.cx, SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi)),
+        let first_line_midpoint = FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi);
+        let second_line_midpoint = SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi);
+
+        text("CPU", right_column, first_line_midpoint)?;
+        text("MEM", right_column, second_line_midpoint)?;
+        text("NET", left_column, first_line_midpoint)?;
+        text("DSK", left_column, second_line_midpoint)?;
+
+        text(
+            &format!("{:.0}%", cpu),
+            right_column - label_width,
+            first_line_midpoint,
+        )?;
+        text(
+            &format!("{:.0}%", mem),
+            right_column - label_width,
+            second_line_midpoint,
+        )?;
+        text(
+            &format!("{:.0} Mb/s", net),
+            left_column - label_width,
+            first_line_midpoint,
+        )?;
+        text(
+            &format!("{:.0} MB/s", dsk),
+            left_column - label_width,
+            second_line_midpoint,
         )?;
 
         Ok(())
