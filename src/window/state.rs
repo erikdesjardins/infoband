@@ -149,10 +149,23 @@ impl ProcHandler for InfoBand {
                     return None;
                 }
             },
-            _ if message == self.shellhook_message => match wparam {
-                // Per https://github.com/dechamps/RudeWindowFixer#the-rude-window-manager,
-                // these are the messages that the shell uses to update its z-order.
-                HSHELL_WINDOWACTIVATED | HSHELL_RUDEAPPACTIVATED | WPARAM(0x35) | WPARAM(0x36) => {
+            _ if message == self.shellhook_message => match (wparam, lparam) {
+                (HSHELL_RUDEAPPACTIVATED, LPARAM(0)) => {
+                    // This seems to indicate that the taskbar itself was focused,
+                    // so we need to re-set ourselves to TOPMOST to stay on top.
+                    log::debug!(
+                        "Reapplying z-order due to shell focus (SHELLHOOK id=0x{:08x})",
+                        wparam.0
+                    );
+                    self.z_order.update(window);
+                    LRESULT(0)
+                }
+                (
+                    HSHELL_WINDOWACTIVATED | HSHELL_RUDEAPPACTIVATED | WPARAM(0x35) | WPARAM(0x36),
+                    _,
+                ) => {
+                    // Per https://github.com/dechamps/RudeWindowFixer#the-rude-window-manager,
+                    // these are the messages that the shell uses to update its z-order.
                     log::debug!(
                         "Queuing z-order check (SHELLHOOK id=0x{:08x} lparam=0x{:012x})",
                         wparam.0,
@@ -162,7 +175,7 @@ impl ProcHandler for InfoBand {
                     LRESULT(0)
                 }
                 _ => {
-                    log::trace!(
+                    log::debug!(
                         "Ignoring shellhook message (SHELLHOOK id=0x{:08x} lparam=0x{:012x})",
                         wparam.0,
                         lparam.0

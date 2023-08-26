@@ -4,7 +4,8 @@ use windows::core::{w, Error, Result, HRESULT};
 use windows::Win32::Foundation::{ERROR_SUCCESS, HWND};
 use windows::Win32::UI::WindowsAndMessaging::{
     FindWindowW, GetWindowLongW, KillTimer, SetCoalescableTimer, SetWindowPos, GWL_EXSTYLE,
-    HWND_BOTTOM, HWND_TOPMOST, SWP_NOMOVE, SWP_NOSIZE, WINDOW_EX_STYLE, WS_EX_TOPMOST,
+    HWND_BOTTOM, HWND_TOPMOST, SWP_NOMOVE, SWP_NOSENDCHANGING, SWP_NOSIZE, SWP_NOZORDER,
+    WINDOW_EX_STYLE, WS_EX_TOPMOST,
 };
 
 /// Manages the z-order of the window.
@@ -41,6 +42,30 @@ impl ZOrder {
         })
     }
 
+    /// For some reason, the first call to SetWindowPos does nothing;
+    /// so this fn must be called once before the first call to `update`.
+    pub fn touch_window(&self, window: HWND) {
+        if let Err(e) = self.touch_window_fallible(window) {
+            log::error!("Touching window failed: {}", e);
+        }
+    }
+
+    pub fn touch_window_fallible(&self, window: HWND) -> Result<()> {
+        unsafe {
+            SetWindowPos(
+                window,
+                HWND(0),
+                0,
+                0,
+                0,
+                0,
+                SWP_NOZORDER | SWP_NOMOVE | SWP_NOSIZE | SWP_NOSENDCHANGING,
+            )?
+        };
+
+        Ok(())
+    }
+
     /// Should be called when a window state changes, so we can update our state to match the taskbar's.
     ///
     /// This is necessary because we receive shell hook events concurrently with the taskbar process,
@@ -51,7 +76,7 @@ impl ZOrder {
         }
     }
 
-    pub fn queue_update_fallible(&self, window: HWND) -> Result<()> {
+    fn queue_update_fallible(&self, window: HWND) -> Result<()> {
         // Debounce the update by killing the existing timer.
         self.kill_timer_fallible(window)?;
 
@@ -77,7 +102,7 @@ impl ZOrder {
         }
     }
 
-    pub fn kill_timer_fallible(&self, window: HWND) -> Result<()> {
+    fn kill_timer_fallible(&self, window: HWND) -> Result<()> {
         let res = unsafe { KillTimer(window, IDT_Z_ORDER_TIMER.0) };
 
         match res {
@@ -87,20 +112,6 @@ impl ZOrder {
         }
     }
 
-    /// For some reason, SetWindowPos doesn't seem to have any effect on the first call.
-    /// Get that out of the way here.
-    pub fn touch_window(&self, window: HWND) {
-        if let Err(e) = self.touch_window_fallible(window) {
-            log::error!("Touching window failed: {}", e);
-        }
-    }
-
-    pub fn touch_window_fallible(&self, window: HWND) -> Result<()> {
-        unsafe { SetWindowPos(window, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE)? };
-
-        Ok(())
-    }
-
     /// Set our window's z-order to match the taskbar's.
     pub fn update(&self, window: HWND) {
         if let Err(e) = self.update_fallible(window) {
@@ -108,42 +119,43 @@ impl ZOrder {
         }
     }
 
-    pub fn update_fallible(&self, window: HWND) -> Result<()> {
-        let style = {
-            let res = unsafe { GetWindowLongW(self.shell, GWL_EXSTYLE) };
-            if res == 0 {
-                return Err(Error::from_win32());
-            }
-            WINDOW_EX_STYLE(res as u32)
-        };
+    fn update_fallible(&self, window: HWND) -> Result<()> {
+        let shell_is_currently_topmost = is_window_topmost(self.shell)?;
 
-        let shell_is_currently_topmost = style.contains(WS_EX_TOPMOST);
-
-        if Some(shell_is_currently_topmost) != self.currently_topmost.get() {
-            log::debug!(
-                "Setting our z-order to topmost={}",
-                shell_is_currently_topmost
-            );
-
-            unsafe {
-                SetWindowPos(
-                    window,
-                    if shell_is_currently_topmost {
-                        HWND_TOPMOST
-                    } else {
-                        HWND_BOTTOM
-                    },
-                    0,
-                    0,
-                    0,
-                    0,
-                    SWP_NOMOVE | SWP_NOSIZE,
-                )?
-            };
-
-            self.currently_topmost.set(Some(shell_is_currently_topmost));
-        }
+        self.set_z_order_to(window, shell_is_currently_topmost)?;
 
         Ok(())
     }
+
+    fn set_z_order_to(&self, window: HWND, topmost: bool) -> Result<()> {
+        log::debug!("Setting z-order to topmost={}", topmost);
+
+        unsafe {
+            SetWindowPos(
+                window,
+                if topmost { HWND_TOPMOST } else { HWND_BOTTOM },
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOSENDCHANGING,
+            )?
+        };
+
+        self.currently_topmost.set(Some(topmost));
+
+        Ok(())
+    }
+}
+
+fn is_window_topmost(handle: HWND) -> Result<bool> {
+    let style = {
+        let res = unsafe { GetWindowLongW(handle, GWL_EXSTYLE) };
+        if res == 0 {
+            return Err(Error::from_win32());
+        }
+        WINDOW_EX_STYLE(res as u32)
+    };
+
+    Ok(style.contains(WS_EX_TOPMOST))
 }
