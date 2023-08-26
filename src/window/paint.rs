@@ -1,6 +1,6 @@
 use crate::constants::{
-    UNSCALED_FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP, UNSCALED_OFFSET_FROM_RIGHT,
-    UNSCALED_SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP, UNSCALED_WINDOW_WIDTH,
+    FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP, OFFSET_FROM_RIGHT, SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP,
+    WINDOW_WIDTH,
 };
 use crate::defer;
 use crate::metrics::Metrics;
@@ -106,9 +106,9 @@ impl Paint {
         let top = monitor_info.rcWork.bottom;
         let bottom = monitor_info.rcMonitor.bottom;
         // Right : i32edge the specified distance from the right edge of the screen
-        let right = monitor_info.rcMonitor.right - UNSCALED_OFFSET_FROM_RIGHT.scale_by(dpi);
+        let right = monitor_info.rcMonitor.right - OFFSET_FROM_RIGHT.scale_by(dpi);
         // Left edge positioned at the specified width
-        let left = right - UNSCALED_WINDOW_WIDTH.scale_by(dpi);
+        let left = right - WINDOW_WIDTH.scale_by(dpi);
 
         let rc = RECT {
             top,
@@ -257,8 +257,8 @@ impl Paint {
             text_style,
             &format!("{:.1}% CPU", cpu),
             right_midpoint_at(
-                size.cx - UNSCALED_WINDOW_WIDTH.scale_by(dpi) / 2,
-                UNSCALED_FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi),
+                size.cx - WINDOW_WIDTH.scale_by(dpi) / 2,
+                FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi),
             ),
         )?;
 
@@ -267,10 +267,7 @@ impl Paint {
             hdc,
             text_style,
             &format!("{:.1}% MEM", mem),
-            right_midpoint_at(
-                size.cx,
-                UNSCALED_FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi),
-            ),
+            right_midpoint_at(size.cx, FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi)),
         )?;
 
         let dsk = metrics.avg_disk_mbyte();
@@ -279,8 +276,8 @@ impl Paint {
             text_style,
             &format!("{:.1}MB/s DSK", dsk),
             right_midpoint_at(
-                size.cx - UNSCALED_WINDOW_WIDTH.scale_by(dpi) / 2,
-                UNSCALED_SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi),
+                size.cx - WINDOW_WIDTH.scale_by(dpi) / 2,
+                SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi),
             ),
         )?;
 
@@ -289,10 +286,7 @@ impl Paint {
             hdc,
             text_style,
             &format!("{:.1}Mb/s NET", net),
-            right_midpoint_at(
-                size.cx,
-                UNSCALED_SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi),
-            ),
+            right_midpoint_at(size.cx, SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi)),
         )?;
 
         Ok(())

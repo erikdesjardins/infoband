@@ -1,3 +1,4 @@
+use crate::utils::Unscaled;
 use windows::Win32::Foundation::WPARAM;
 use windows::Win32::UI::WindowsAndMessaging::TIMERV_DEFAULT_COALESCING;
 
@@ -65,10 +66,10 @@ use windows::Win32::UI::WindowsAndMessaging::TIMERV_DEFAULT_COALESCING;
 //  |     |     28px
 //  |    12px    |
 //  v     v      v
-pub const UNSCALED_FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP: i32 = 15;
-pub const UNSCALED_SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP: i32 = 31;
-pub const UNSCALED_OFFSET_FROM_RIGHT: i32 = 375;
-pub const UNSCALED_WINDOW_WIDTH: i32 = 170;
+pub const FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP: Unscaled<i32> = Unscaled::new(15);
+pub const SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP: Unscaled<i32> = Unscaled::new(31);
+pub const OFFSET_FROM_RIGHT: Unscaled<i32> = Unscaled::new(375);
+pub const WINDOW_WIDTH: Unscaled<i32> = Unscaled::new(170);
 
 // User messages
 pub const UM_ENABLE_DEBUG_PAINT: WPARAM = WPARAM(1);

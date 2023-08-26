@@ -145,6 +145,26 @@ impl ScaleBy for SIZE {
     }
 }
 
+/// Represents an unscaled constant value.
+/// To prevent misuse, the inner value is not available until you call `scale_by`.
+#[derive(Copy, Clone)]
+pub struct Unscaled<T>(T)
+where
+    T: ScaleBy;
+
+impl<T> Unscaled<T>
+where
+    T: ScaleBy,
+{
+    pub const fn new(value: T) -> Self {
+        Self(value)
+    }
+
+    pub fn scale_by(self, by: ScalingFactor) -> T {
+        self.0.scale_by(by)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
