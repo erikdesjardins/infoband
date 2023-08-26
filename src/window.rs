@@ -1,8 +1,9 @@
 use crate::constants::{
     FETCH_TIMER_COALESCE, FETCH_TIMER_MS, IDT_FETCH_TIMER, IDT_REDRAW_TIMER, REDRAW_TIMER_COALESCE,
     REDRAW_TIMER_MS, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_METRICS, UM_INITIAL_PAINT,
-    UM_INITIAL_Z_ORDER,
+    UM_INITIAL_Z_ORDER, UM_SET_OFFSET_FROM_RIGHT,
 };
+use crate::utils::Unscaled;
 use crate::window::proc::window_proc;
 use windows::core::{w, Error, Result, HRESULT, HSTRING};
 use windows::Win32::Foundation::{HINSTANCE, LPARAM};
@@ -32,7 +33,11 @@ pub fn make_process_dpi_aware() -> Result<()> {
 }
 
 /// Create the toplevel window, start timers for updating it, and pump the windows message loop.
-pub fn create_and_run_message_loop(instance: HINSTANCE, debug_paint: bool) -> Result<()> {
+pub fn create_and_run_message_loop(
+    instance: HINSTANCE,
+    offset_from_right: Unscaled<i32>,
+    debug_paint: bool,
+) -> Result<()> {
     // SAFETY: using predefined system cursor, so instance handle is unused; IDC_ARROW is guaranteed to exist
     let cursor = unsafe { LoadCursorW(None, IDC_ARROW)? };
 
@@ -91,6 +96,10 @@ pub fn create_and_run_message_loop(instance: HINSTANCE, debug_paint: bool) -> Re
     if debug_paint {
         unsafe { PostMessageW(window, WM_USER, UM_ENABLE_DEBUG_PAINT, LPARAM(0))? };
     }
+
+    // Enqueue a message to tell the window about the offset from the right edge of the screen
+    let offset = offset_from_right.into_inner() as _;
+    unsafe { PostMessageW(window, WM_USER, UM_SET_OFFSET_FROM_RIGHT, LPARAM(offset))? };
 
     // Enqueue a message for initial metrics fetch
     unsafe { PostMessageW(window, WM_USER, UM_INITIAL_METRICS, LPARAM(0))? };

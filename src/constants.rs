@@ -68,14 +68,19 @@ use windows::Win32::UI::WindowsAndMessaging::TIMERV_DEFAULT_COALESCING;
 //  v     v      v
 pub const FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP: Unscaled<i32> = Unscaled::new(15);
 pub const SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP: Unscaled<i32> = Unscaled::new(31);
-pub const OFFSET_FROM_RIGHT: Unscaled<i32> = Unscaled::new(375);
 pub const WINDOW_WIDTH: Unscaled<i32> = Unscaled::new(170);
+pub const DEFAULT_OFFSET_FROM_RIGHT: Unscaled<i32> = Unscaled::new(375);
+
+// File names
+pub const LOG_FILE_NAME: &str = "infoband.log";
+pub const CONFIG_FILE_NAME: &str = "infoband.json";
 
 // User messages
 pub const UM_ENABLE_DEBUG_PAINT: WPARAM = WPARAM(1);
-pub const UM_INITIAL_METRICS: WPARAM = WPARAM(2);
-pub const UM_INITIAL_Z_ORDER: WPARAM = WPARAM(3);
-pub const UM_INITIAL_PAINT: WPARAM = WPARAM(4);
+pub const UM_SET_OFFSET_FROM_RIGHT: WPARAM = WPARAM(2);
+pub const UM_INITIAL_METRICS: WPARAM = WPARAM(3);
+pub const UM_INITIAL_Z_ORDER: WPARAM = WPARAM(4);
+pub const UM_INITIAL_PAINT: WPARAM = WPARAM(5);
 
 // Timer ids
 pub const IDT_FETCH_TIMER: WPARAM = WPARAM(1);

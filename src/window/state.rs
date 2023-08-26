@@ -1,10 +1,10 @@
 use crate::constants::{
     HSHELL_RUDEAPPACTIVATED, HSHELL_WINDOWACTIVATED, IDT_FETCH_TIMER, IDT_REDRAW_TIMER,
     IDT_Z_ORDER_TIMER, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_METRICS, UM_INITIAL_PAINT,
-    UM_INITIAL_Z_ORDER,
+    UM_INITIAL_Z_ORDER, UM_SET_OFFSET_FROM_RIGHT,
 };
 use crate::metrics::Metrics;
-use crate::utils::ScaleBy;
+use crate::utils::{ScaleBy, Unscaled};
 use crate::window::messages;
 use crate::window::paint::Paint;
 use crate::window::proc::ProcHandler;
@@ -121,6 +121,15 @@ impl ProcHandler for InfoBand {
                 UM_ENABLE_DEBUG_PAINT => {
                     log::info!("Enabling debug paint (UM_ENABLE_DEBUG_PAINT)");
                     self.paint.set_debug(true);
+                    LRESULT(0)
+                }
+                UM_SET_OFFSET_FROM_RIGHT => {
+                    let offset_from_right = Unscaled::new(lparam.0 as _);
+                    log::info!(
+                        "Setting offset from right to {} (UM_SET_OFFSET_FROM_RIGHT)",
+                        offset_from_right
+                    );
+                    self.paint.set_offset_from_right(offset_from_right);
                     LRESULT(0)
                 }
                 UM_INITIAL_METRICS => {

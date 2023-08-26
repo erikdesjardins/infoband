@@ -1,3 +1,6 @@
+use std::fmt::{self, Display};
+
+use serde::{Deserialize, Serialize};
 use windows::Win32::Foundation::{POINT, RECT, SIZE};
 
 pub trait OptionExt {
@@ -146,8 +149,9 @@ impl ScaleBy for SIZE {
 }
 
 /// Represents an unscaled constant value.
-/// To prevent misuse, the inner value is not available until you call `scale_by`.
-#[derive(Copy, Clone)]
+/// To prevent misuse, the inner value is not vailable unless you call `scale_by` or `into_inner`.
+#[derive(Copy, Clone, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct Unscaled<T>(T)
 where
     T: ScaleBy;
@@ -162,6 +166,16 @@ where
 
     pub fn scale_by(self, by: ScalingFactor) -> T {
         self.0.scale_by(by)
+    }
+
+    pub fn into_inner(self) -> T {
+        self.0
+    }
+}
+
+impl Display for Unscaled<i32> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
     }
 }
 
