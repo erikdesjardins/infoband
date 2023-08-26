@@ -96,7 +96,7 @@ impl ProcHandler for InfoBand {
                 // Low 16 bits contains DPI
                 let dpi_raw = u32::from(wparam.0 as u16);
                 let dpi = self.paint.set_dpi(dpi_raw);
-                log::debug!(
+                log::info!(
                     "DPI changed to {} or {}% (WM_DPICHANGED)",
                     dpi_raw,
                     100.scale_by(dpi)
@@ -112,30 +112,30 @@ impl ProcHandler for InfoBand {
                 LRESULT(0)
             }
             WM_DESTROY => {
-                log::debug!("Shutting down (WM_DESTROY)");
+                log::info!("Shutting down (WM_DESTROY)");
                 // SAFETY: no preconditions
                 unsafe { PostQuitMessage(0) };
                 LRESULT(0)
             }
             WM_USER => match wparam {
                 UM_ENABLE_DEBUG_PAINT => {
-                    log::debug!("Enabling debug paint (UM_ENABLE_DEBUG_PAINT)");
+                    log::info!("Enabling debug paint (UM_ENABLE_DEBUG_PAINT)");
                     self.paint.set_debug(true);
                     LRESULT(0)
                 }
                 UM_INITIAL_METRICS => {
-                    log::debug!("Initial metrics fetch (UM_INITIAL_METRICS)");
+                    log::info!("Initial metrics fetch (UM_INITIAL_METRICS)");
                     self.metrics.fetch();
                     LRESULT(0)
                 }
                 UM_INITIAL_Z_ORDER => {
-                    log::debug!("Initial z-order update (UM_INITIAL_Z_ORDER)");
+                    log::info!("Initial z-order update (UM_INITIAL_Z_ORDER)");
                     self.z_order.touch_window(window);
                     self.z_order.update(window);
                     LRESULT(0)
                 }
                 UM_INITIAL_PAINT => {
-                    log::debug!("Initial paint (UM_INITIAL_PAINT)");
+                    log::info!("Initial paint (UM_INITIAL_PAINT)");
                     self.paint.compute_size_and_position();
                     self.paint.render(window, &self.metrics);
                     LRESULT(0)
