@@ -93,7 +93,7 @@ fn init_logging(path: Option<&Path>, verbose: u8) {
             .appender(Appender::builder().build("default", {
                 let encoder = Box::new(PatternEncoder::new("[{date(%Y-%m-%d %H:%M:%S%.3f)} {highlight({level}):5} {target}] {highlight({message})}{n}"));
                 if let Some(path) = path {
-                    Box::new(FileAppender::builder().build(path).unwrap())
+                    Box::new(FileAppender::builder().encoder(encoder).build(path).unwrap())
                 } else {
                     Box::new(
                         ConsoleAppender::builder()
