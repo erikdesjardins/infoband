@@ -24,6 +24,7 @@ pub trait RectExt {
     fn size(self) -> SIZE;
 
     fn with_right_edge_at(self, x: i32) -> Self;
+    fn with_left_edge_at(self, x: i32) -> Self;
     fn with_top_edge_at(self, y: i32) -> Self;
     fn with_vertical_midpoint_at(self, y: i32) -> Self;
 
@@ -52,6 +53,14 @@ impl RectExt for RECT {
         SIZE {
             cx: self.width(),
             cy: self.height(),
+        }
+    }
+
+    fn with_left_edge_at(self, x: i32) -> Self {
+        Self {
+            left: x,
+            right: x + self.width(),
+            ..self
         }
     }
 
@@ -170,6 +179,10 @@ where
 
     pub fn into_inner(self) -> T {
         self.0
+    }
+
+    pub const fn as_inner(&self) -> &T {
+        &self.0
     }
 }
 
