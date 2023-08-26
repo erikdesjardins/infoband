@@ -1,4 +1,6 @@
+use crate::utils::Unscaled;
 use windows::Win32::Foundation::WPARAM;
+use windows::Win32::UI::WindowsAndMessaging::TIMERV_DEFAULT_COALESCING;
 
 // Sizing and positioning
 //
@@ -64,24 +66,41 @@ use windows::Win32::Foundation::WPARAM;
 //  |     |     28px
 //  |    12px    |
 //  v     v      v
-pub const UNSCALED_FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP: i32 = 15;
-pub const UNSCALED_SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP: i32 = 31;
-pub const UNSCALED_OFFSET_FROM_RIGHT: i32 = 375;
-pub const UNSCALED_WINDOW_WIDTH: i32 = 170;
+pub const FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP: Unscaled<i32> = Unscaled::new(15);
+pub const SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP: Unscaled<i32> = Unscaled::new(31);
+pub const WINDOW_WIDTH: Unscaled<i32> = Unscaled::new(170);
+pub const DEFAULT_OFFSET_FROM_RIGHT: Unscaled<i32> = Unscaled::new(375);
+
+// File names
+pub const LOG_FILE_NAME: &str = "infoband.log";
+pub const CONFIG_FILE_NAME: &str = "infoband.json";
 
 // User messages
 pub const UM_ENABLE_DEBUG_PAINT: WPARAM = WPARAM(1);
-pub const UM_INITIAL_PAINT: WPARAM = WPARAM(2);
+pub const UM_SET_OFFSET_FROM_RIGHT: WPARAM = WPARAM(2);
 pub const UM_INITIAL_METRICS: WPARAM = WPARAM(3);
+pub const UM_INITIAL_Z_ORDER: WPARAM = WPARAM(4);
+pub const UM_INITIAL_PAINT: WPARAM = WPARAM(5);
 
 // Timer ids
 pub const IDT_FETCH_TIMER: WPARAM = WPARAM(1);
 pub const IDT_REDRAW_TIMER: WPARAM = WPARAM(2);
+pub const IDT_Z_ORDER_TIMER: WPARAM = WPARAM(3);
 
 // Timer intervals
 pub const FETCH_TIMER_MS: u32 = 1000;
 pub const REDRAW_TIMER_MS: u32 = 5 * 1000;
+pub const Z_ORDER_TIMER_MS: u32 = 50;
+
+// Timer coalescing delays
+pub const FETCH_TIMER_COALESCE: u32 = 1000;
+pub const REDRAW_TIMER_COALESCE: u32 = 1000;
+pub const Z_ORDER_TIMER_COALESCE: u32 = TIMERV_DEFAULT_COALESCING; // usually something short like 32ms
 
 // Metrics
 pub const SAMPLE_COUNT: usize = 8;
 pub const EXPONENTIAL_DECAY_ALPHA: f64 = 0.631; // 0.631^5 = 0.1, so 90% of the weight is for the last 5 samples
+
+// Shell hook messages
+pub const HSHELL_WINDOWACTIVATED: WPARAM = WPARAM(0x4);
+pub const HSHELL_RUDEAPPACTIVATED: WPARAM = WPARAM(0x8004);

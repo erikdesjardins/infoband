@@ -1,30 +1,46 @@
 use crate::constants::{
-    IDT_FETCH_TIMER, IDT_REDRAW_TIMER, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_METRICS, UM_INITIAL_PAINT,
+    HSHELL_RUDEAPPACTIVATED, HSHELL_WINDOWACTIVATED, IDT_FETCH_TIMER, IDT_REDRAW_TIMER,
+    IDT_Z_ORDER_TIMER, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_METRICS, UM_INITIAL_PAINT,
+    UM_INITIAL_Z_ORDER, UM_SET_OFFSET_FROM_RIGHT,
 };
 use crate::metrics::Metrics;
-use crate::utils::ScaleBy;
+use crate::utils::{ScaleBy, Unscaled};
 use crate::window::messages;
+use crate::window::paint::Paint;
 use crate::window::proc::ProcHandler;
-use windows::core::Result;
+use crate::window::z_order::ZOrder;
+use windows::core::{w, Error, Result};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
-    PostQuitMessage, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_ERASEBKGND, WM_NCCALCSIZE,
-    WM_NCPAINT, WM_PAINT, WM_TIMER, WM_USER,
+    PostQuitMessage, RegisterWindowMessageW, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED,
+    WM_ERASEBKGND, WM_NCCALCSIZE, WM_NCPAINT, WM_PAINT, WM_TIMER, WM_USER,
 };
 
-use super::paint::Paint;
-
 pub struct InfoBand {
+    /// The message ID of the SHELLHOOK message.
+    shellhook_message: u32,
     /// Paint state.
-    pub paint: Paint,
+    paint: Paint,
+    /// Z=order state.
+    z_order: ZOrder,
     /// Performance metrics.
-    pub metrics: Metrics,
+    metrics: Metrics,
 }
 
 impl ProcHandler for InfoBand {
     fn new(window: HWND) -> Result<Self> {
+        let shellhook_message = {
+            let res = unsafe { RegisterWindowMessageW(w!("SHELLHOOK")) };
+            if res == 0 {
+                return Err(Error::from_win32());
+            }
+            res
+        };
+
         Ok(Self {
+            shellhook_message,
             paint: Paint::new(window)?,
+            z_order: ZOrder::new()?,
             metrics: Metrics::new()?,
         })
     }
@@ -80,7 +96,7 @@ impl ProcHandler for InfoBand {
                 // Low 16 bits contains DPI
                 let dpi_raw = u32::from(wparam.0 as u16);
                 let dpi = self.paint.set_dpi(dpi_raw);
-                log::debug!(
+                log::info!(
                     "DPI changed to {} or {}% (WM_DPICHANGED)",
                     dpi_raw,
                     100.scale_by(dpi)
@@ -96,26 +112,41 @@ impl ProcHandler for InfoBand {
                 LRESULT(0)
             }
             WM_DESTROY => {
-                log::debug!("Shutting down (WM_DESTROY)");
+                log::info!("Shutting down (WM_DESTROY)");
                 // SAFETY: no preconditions
                 unsafe { PostQuitMessage(0) };
                 LRESULT(0)
             }
             WM_USER => match wparam {
                 UM_ENABLE_DEBUG_PAINT => {
-                    log::debug!("Enabling debug paint (UM_ENABLE_DEBUG_PAINT)");
+                    log::info!("Enabling debug paint (UM_ENABLE_DEBUG_PAINT)");
                     self.paint.set_debug(true);
                     LRESULT(0)
                 }
-                UM_INITIAL_PAINT => {
-                    log::debug!("Starting paint (UM_INITIAL_PAINT)");
-                    self.paint.compute_size_and_position();
-                    self.paint.render(window, &self.metrics);
+                UM_SET_OFFSET_FROM_RIGHT => {
+                    let offset_from_right = Unscaled::new(lparam.0 as _);
+                    log::info!(
+                        "Setting offset from right to {} (UM_SET_OFFSET_FROM_RIGHT)",
+                        offset_from_right
+                    );
+                    self.paint.set_offset_from_right(offset_from_right);
                     LRESULT(0)
                 }
                 UM_INITIAL_METRICS => {
-                    log::debug!("Starting metrics fetch (UM_INITIAL_METRICS)");
+                    log::info!("Initial metrics fetch (UM_INITIAL_METRICS)");
                     self.metrics.fetch();
+                    LRESULT(0)
+                }
+                UM_INITIAL_Z_ORDER => {
+                    log::info!("Initial z-order update (UM_INITIAL_Z_ORDER)");
+                    self.z_order.touch_window(window);
+                    self.z_order.update(window);
+                    LRESULT(0)
+                }
+                UM_INITIAL_PAINT => {
+                    log::info!("Initial paint (UM_INITIAL_PAINT)");
+                    self.paint.compute_size_and_position();
+                    self.paint.render(window, &self.metrics);
                     LRESULT(0)
                 }
                 _ => {
@@ -127,15 +158,55 @@ impl ProcHandler for InfoBand {
                     return None;
                 }
             },
+            _ if message == self.shellhook_message => match (wparam, lparam) {
+                (HSHELL_RUDEAPPACTIVATED, LPARAM(0)) => {
+                    // This seems to indicate that the taskbar itself was focused,
+                    // so we need to re-set ourselves to TOPMOST to stay on top.
+                    log::debug!(
+                        "Reapplying z-order due to shell focus (SHELLHOOK id=0x{:08x})",
+                        wparam.0
+                    );
+                    self.z_order.update(window);
+                    LRESULT(0)
+                }
+                (
+                    HSHELL_WINDOWACTIVATED | HSHELL_RUDEAPPACTIVATED | WPARAM(0x35) | WPARAM(0x36),
+                    _,
+                ) => {
+                    // Per https://github.com/dechamps/RudeWindowFixer#the-rude-window-manager,
+                    // these are the messages that the shell uses to update its z-order.
+                    log::debug!(
+                        "Queuing z-order check (SHELLHOOK id=0x{:08x} lparam=0x{:012x})",
+                        wparam.0,
+                        lparam.0
+                    );
+                    self.z_order.queue_update(window);
+                    LRESULT(0)
+                }
+                _ => {
+                    log::debug!(
+                        "Ignoring shellhook message (SHELLHOOK id=0x{:08x} lparam=0x{:012x})",
+                        wparam.0,
+                        lparam.0
+                    );
+                    LRESULT(0)
+                }
+            },
             WM_TIMER => match wparam {
                 IDT_FETCH_TIMER => {
-                    log::debug!("Fetching metrics (IDT_FETCH_TIMER)");
+                    log::trace!("Fetching metrics (IDT_FETCH_TIMER)");
                     self.metrics.fetch();
                     LRESULT(0)
                 }
                 IDT_REDRAW_TIMER => {
-                    log::debug!("Starting repaint (IDT_REDRAW_TIMER)");
+                    log::trace!("Starting repaint (IDT_REDRAW_TIMER)");
                     self.paint.render(window, &self.metrics);
+                    LRESULT(0)
+                }
+                IDT_Z_ORDER_TIMER => {
+                    log::debug!("Rechecking z-order (IDT_Z_ORDER_TIMER)",);
+                    self.z_order.kill_timer(window);
+                    self.z_order.update(window);
                     LRESULT(0)
                 }
                 _ => {
@@ -148,7 +219,7 @@ impl ProcHandler for InfoBand {
                 }
             },
             _ => {
-                log::trace!(
+                log::debug!(
                     "Default window proc ({} wparam=0x{:08x} lparam=0x{:012x})",
                     messages::Name(message),
                     wparam.0,

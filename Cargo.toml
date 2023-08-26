@@ -1,6 +1,10 @@
 [package]
 name = "infoband"
-version = "1.0.0"
+version = "1.1.2"
+authors = ["Erik Desjardins <erikdesjardins@users.noreply.github.com>"]
+description = "Windows \"DeskBand\" displaying cpu/mem/disk/network info."
+repository = "https://github.com/erikdesjardins/infoband"
+license = "MIT"
 edition = "2021"
 
 [dependencies]
@@ -8,6 +12,8 @@ argh = "0.1"
 log4rs = { version = "1.0", features = ["console_appender", "file_appender"] }
 log = "0.4"
 memoffset = "0.9"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 windows = { version = "0.51", features = [
     "implement",
     "Win32_Foundation",

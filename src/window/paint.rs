@@ -1,10 +1,9 @@
 use crate::constants::{
-    UNSCALED_FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP, UNSCALED_OFFSET_FROM_RIGHT,
-    UNSCALED_SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP, UNSCALED_WINDOW_WIDTH,
+    FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP, SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP, WINDOW_WIDTH,
 };
 use crate::defer;
 use crate::metrics::Metrics;
-use crate::utils::{RectExt, ScaleBy, ScalingFactor};
+use crate::utils::{RectExt, ScaleBy, ScalingFactor, Unscaled};
 use std::cell::Cell;
 use std::mem;
 use std::ptr;
@@ -29,6 +28,8 @@ pub struct Paint {
     called_buffered_paint_init: (),
     /// Whether to make the window more visible for debugging.
     pub debug: Cell<bool>,
+    /// Offset from the right edge of the monitor, in unscaled pixels.
+    pub offset_from_right: Cell<Unscaled<i32>>,
     /// DPI scaling factor of the window.
     pub dpi: Cell<ScalingFactor>,
     /// Size of the window.
@@ -56,9 +57,13 @@ impl Paint {
         let size = SIZE { cx: 0, cy: 0 };
         let position = POINT { x: 0, y: 0 };
 
+        // Not using DEFAULT_OFFSET_FROM_RIGHT here so issues with sending config are obvious
+        let offset_from_right = Unscaled::new(0);
+
         Ok(Self {
             debug: Cell::new(false),
             dpi: Cell::new(dpi),
+            offset_from_right: Cell::new(offset_from_right),
             size: Cell::new(size),
             position: Cell::new(position),
             called_buffered_paint_init: {
@@ -71,6 +76,10 @@ impl Paint {
 
     pub fn set_debug(&self, debug: bool) {
         self.debug.set(debug);
+    }
+
+    pub fn set_offset_from_right(&self, offset_from_right: Unscaled<i32>) {
+        self.offset_from_right.set(offset_from_right);
     }
 
     pub fn set_dpi(&self, dpi: u32) -> ScalingFactor {
@@ -106,9 +115,9 @@ impl Paint {
         let top = monitor_info.rcWork.bottom;
         let bottom = monitor_info.rcMonitor.bottom;
         // Right : i32edge the specified distance from the right edge of the screen
-        let right = monitor_info.rcMonitor.right - UNSCALED_OFFSET_FROM_RIGHT.scale_by(dpi);
+        let right = monitor_info.rcMonitor.right - self.offset_from_right.get().scale_by(dpi);
         // Left edge positioned at the specified width
-        let left = right - UNSCALED_WINDOW_WIDTH.scale_by(dpi);
+        let left = right - WINDOW_WIDTH.scale_by(dpi);
 
         let rc = RECT {
             top,
@@ -257,8 +266,8 @@ impl Paint {
             text_style,
             &format!("{:.1}% CPU", cpu),
             right_midpoint_at(
-                size.cx - UNSCALED_WINDOW_WIDTH.scale_by(dpi) / 2,
-                UNSCALED_FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi),
+                size.cx - WINDOW_WIDTH.scale_by(dpi) / 2,
+                FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi),
             ),
         )?;
 
@@ -267,10 +276,7 @@ impl Paint {
             hdc,
             text_style,
             &format!("{:.1}% MEM", mem),
-            right_midpoint_at(
-                size.cx,
-                UNSCALED_FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi),
-            ),
+            right_midpoint_at(size.cx, FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi)),
         )?;
 
         let dsk = metrics.avg_disk_mbyte();
@@ -279,8 +285,8 @@ impl Paint {
             text_style,
             &format!("{:.1}MB/s DSK", dsk),
             right_midpoint_at(
-                size.cx - UNSCALED_WINDOW_WIDTH.scale_by(dpi) / 2,
-                UNSCALED_SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi),
+                size.cx - WINDOW_WIDTH.scale_by(dpi) / 2,
+                SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi),
             ),
         )?;
 
@@ -289,10 +295,7 @@ impl Paint {
             hdc,
             text_style,
             &format!("{:.1}Mb/s NET", net),
-            right_midpoint_at(
-                size.cx,
-                UNSCALED_SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi),
-            ),
+            right_midpoint_at(size.cx, SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP.scale_by(dpi)),
         )?;
 
         Ok(())

@@ -26,27 +26,26 @@ impl State {
             u64::from(filetime.dwHighDateTime) << 32 | u64::from(filetime.dwLowDateTime)
         };
 
-        let cur_idle = to_100ns_intervals(idle);
-        let cur_kernel_plus_idle = to_100ns_intervals(kernel_plus_idle);
-        let cur_user = to_100ns_intervals(user);
+        let idle = to_100ns_intervals(idle);
+        let kernel_plus_idle = to_100ns_intervals(kernel_plus_idle);
+        let user = to_100ns_intervals(user);
 
         // On first sample, just store the current times and return zero.
         let percent = match self.prev_times.get() {
             Some((prev_idle, prev_kernel_plus_idle, prev_user)) => {
-                let idle = cur_idle.wrapping_sub(prev_idle);
-                let kernel_plus_idle = cur_kernel_plus_idle.wrapping_sub(prev_kernel_plus_idle);
-                let user = cur_user.wrapping_sub(prev_user);
+                let idle_delta = idle.wrapping_sub(prev_idle);
+                let kernel_plus_idle_delta = kernel_plus_idle.wrapping_sub(prev_kernel_plus_idle);
+                let user_delta = user.wrapping_sub(prev_user);
 
-                let time_delta = kernel_plus_idle + user;
-                let active_delta = time_delta - idle;
+                let time_delta = kernel_plus_idle_delta + user_delta;
+                let active_delta = time_delta - idle_delta;
 
                 (active_delta * 100) as f64 / (time_delta as f64)
             }
             None => 0.0,
         };
 
-        self.prev_times
-            .set(Some((cur_idle, cur_kernel_plus_idle, cur_user)));
+        self.prev_times.set(Some((idle, kernel_plus_idle, user)));
 
         Ok(percent)
     }

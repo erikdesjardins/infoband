@@ -54,16 +54,16 @@ impl Metrics {
     }
 
     fn fetch_fallible(&self) -> Result<()> {
-        let cur_time = Instant::now();
-        let prev_time = self.prev_time.replace(Some(cur_time));
-        let time_delta = prev_time.map(|prev_time| cur_time - prev_time);
+        let time = Instant::now();
+        let prev_time = self.prev_time.replace(Some(time));
+        let time_delta = prev_time.map(|prev_time| time - prev_time);
 
         let cpu = self.cpu.fetch_percent()?;
         let memory = self.memory.fetch_percent()?;
         let disk = self.disk.fetch_mbyte(time_delta)?;
         let network = self.network.fetch_mbit(time_delta)?;
 
-        log::debug!(
+        log::trace!(
             "Fetched samples: cpu={:.3} memory={:.3} disk={:.3} network={:.3}",
             cpu,
             memory,

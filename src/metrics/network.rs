@@ -1,14 +1,16 @@
 use memoffset::offset_of;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::mem;
+use std::ptr::addr_of_mut;
 use std::time::Duration;
-use std::{cell::Cell, ptr::addr_of_mut};
 use windows::core::Result;
 use windows::Win32::Foundation::WIN32_ERROR;
 use windows::Win32::NetworkManagement::IpHelper::{GetIfTable, MIB_IFROW, MIB_IFTABLE};
 
 #[derive(Default)]
 pub struct State {
-    prev_byte_count: Cell<u64>,
+    prev_byte_counts: RefCell<HashMap<u64, (u32, u32)>>,
 }
 
 impl State {
@@ -53,29 +55,41 @@ impl State {
 
         interfaces.sort_unstable_by_key(|if_row| if_row.bPhysAddr);
 
-        let mut cur_network_byte_count = 0;
+        let mut prev_byte_counts = self.prev_byte_counts.borrow_mut();
+        let mut total_byte_delta = 0;
 
-        let mut last_address = Default::default();
+        let mut last_addr = 0;
         for if_row in interfaces {
-            if if_row.bPhysAddr == last_address {
+            let addr = u64::from_ne_bytes(if_row.bPhysAddr);
+            if addr == last_addr {
+                // Duplicate entry, ignore.
                 continue;
             }
-            last_address = if_row.bPhysAddr;
-            cur_network_byte_count += u64::from(if_row.dwInOctets) + u64::from(if_row.dwOutOctets);
+            last_addr = addr;
+
+            let in_bytes = if_row.dwInOctets;
+            let out_bytes = if_row.dwOutOctets;
+
+            // Compute delta if this interface has been seen before; otherwise just store the current counts
+            if let Some((prev_in_bytes, prev_out_bytes)) =
+                prev_byte_counts.insert(addr, (in_bytes, out_bytes))
+            {
+                let in_byte_delta = in_bytes.wrapping_sub(prev_in_bytes);
+                let out_byte_delta = out_bytes.wrapping_sub(prev_out_bytes);
+
+                total_byte_delta += u64::from(in_byte_delta) + u64::from(out_byte_delta);
+            }
         }
 
-        // On first sample, just store the current byte count and return zero.
+        // On first sample, just return zero.
         let mbit = match time_delta {
             Some(time_delta) => {
                 let bits_per_byte = 8;
-                let bits =
-                    cur_network_byte_count.wrapping_sub(self.prev_byte_count.get()) * bits_per_byte;
+                let bits = total_byte_delta * bits_per_byte;
                 (bits as f64) / 1_000_000.0 / time_delta.as_secs_f64()
             }
             None => 0.0,
         };
-
-        self.prev_byte_count.set(cur_network_byte_count);
 
         Ok(mbit)
     }

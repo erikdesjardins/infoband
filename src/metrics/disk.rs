@@ -28,8 +28,8 @@ pub struct State {
     // SAFETY: must not be modified or dropped until this struct is dropped.
     handle: HANDLE,
 
-    // Previous count of total bytes transferred.
-    prev_byte_count: Cell<u64>,
+    prev_byte_count_0: Cell<u64>,
+    prev_byte_count_1: Cell<u64>,
 }
 
 impl Drop for State {
@@ -131,7 +131,8 @@ impl State {
 
         Ok(Self {
             handle,
-            prev_byte_count: Cell::new(0),
+            prev_byte_count_0: Default::default(),
+            prev_byte_count_1: Default::default(),
         })
     }
 
@@ -194,21 +195,24 @@ impl State {
         );
 
         // Counter ordering is not guaranteed, so this might be read,write or write,read; see above.
-        let bytes_read_or_written = results.counter0_data_value;
-        let bytes_written_or_read = results.counter1_data_value;
-
-        let cur_byte_count = bytes_read_or_written.wrapping_add(bytes_written_or_read);
+        let byte_count_0 = results.counter0_data_value;
+        let byte_count_1 = results.counter1_data_value;
 
         // On first sample, just store the current byte count and return zero.
         let mbyte = match time_delta {
             Some(time_delta) => {
-                let bytes = cur_byte_count.wrapping_sub(self.prev_byte_count.get());
-                bytes as f64 / (1024 * 1024) as f64 / time_delta.as_secs_f64()
+                let byte_delta_0 = byte_count_0.wrapping_sub(self.prev_byte_count_0.get());
+                let byte_delta_1 = byte_count_1.wrapping_sub(self.prev_byte_count_1.get());
+
+                let total_byte_delta = byte_delta_0 + byte_delta_1;
+
+                total_byte_delta as f64 / (1024 * 1024) as f64 / time_delta.as_secs_f64()
             }
             None => 0.0,
         };
 
-        self.prev_byte_count.set(cur_byte_count);
+        self.prev_byte_count_0.set(byte_count_0);
+        self.prev_byte_count_1.set(byte_count_1);
 
         Ok(mbyte)
     }

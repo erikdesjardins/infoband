@@ -1,7 +1,9 @@
 use crate::constants::{
-    FETCH_TIMER_MS, IDT_FETCH_TIMER, IDT_REDRAW_TIMER, REDRAW_TIMER_MS, UM_ENABLE_DEBUG_PAINT,
-    UM_INITIAL_METRICS, UM_INITIAL_PAINT,
+    FETCH_TIMER_COALESCE, FETCH_TIMER_MS, IDT_FETCH_TIMER, IDT_REDRAW_TIMER, REDRAW_TIMER_COALESCE,
+    REDRAW_TIMER_MS, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_METRICS, UM_INITIAL_PAINT,
+    UM_INITIAL_Z_ORDER, UM_SET_OFFSET_FROM_RIGHT,
 };
+use crate::utils::Unscaled;
 use crate::window::proc::window_proc;
 use windows::core::{w, Error, Result, HRESULT, HSTRING};
 use windows::Win32::Foundation::{HINSTANCE, LPARAM};
@@ -10,15 +12,16 @@ use windows::Win32::UI::HiDpi::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DispatchMessageW, GetMessageW, LoadCursorW, PostMessageW, RegisterClassW,
-    SetTimer, ShowWindow, CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, IDC_ARROW, MSG, SW_SHOWNA,
-    WM_USER, WNDCLASSW, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_EX_LAYERED, WS_EX_TOOLWINDOW,
-    WS_EX_TRANSPARENT, WS_POPUP,
+    RegisterShellHookWindow, SetCoalescableTimer, ShowWindow, CS_HREDRAW, CS_VREDRAW,
+    CW_USEDEFAULT, IDC_ARROW, MSG, SW_SHOWNA, WM_USER, WNDCLASSW, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
+    WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT, WS_POPUP,
 };
 
 mod messages;
 mod paint;
 mod proc;
 mod state;
+mod z_order;
 
 /// Make this process HiDPI aware.
 /// Must be called before any other windowing functions.
@@ -30,7 +33,11 @@ pub fn make_process_dpi_aware() -> Result<()> {
 }
 
 /// Create the toplevel window, start timers for updating it, and pump the windows message loop.
-pub fn create_and_run_message_loop(instance: HINSTANCE, debug_paint: bool) -> Result<()> {
+pub fn create_and_run_message_loop(
+    instance: HINSTANCE,
+    offset_from_right: Unscaled<i32>,
+    debug_paint: bool,
+) -> Result<()> {
     // SAFETY: using predefined system cursor, so instance handle is unused; IDC_ARROW is guaranteed to exist
     let cursor = unsafe { LoadCursorW(None, IDC_ARROW)? };
 
@@ -58,7 +65,7 @@ pub fn create_and_run_message_loop(instance: HINSTANCE, debug_paint: bool) -> Re
                 // Transparent window allows clicks to pass through everywhere.
                 // (Layered windows allow clicks to pass through in transparent areas only.)
                 // Tool window hides it from the taskbar.
-                WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW,
+                WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
                 class,
                 None,
                 // Popup window removes borders and title bar.
@@ -82,27 +89,54 @@ pub fn create_and_run_message_loop(instance: HINSTANCE, debug_paint: bool) -> Re
         window
     };
 
+    // Register window to receive shell hook messages. We use these to follow the z-order state of the taskbar.
+    unsafe { RegisterShellHookWindow(window).ok()? };
+
     // Enqueue a message to tell the window about debug settings
     if debug_paint {
         unsafe { PostMessageW(window, WM_USER, UM_ENABLE_DEBUG_PAINT, LPARAM(0))? };
     }
 
+    // Enqueue a message to tell the window about the offset from the right edge of the screen
+    let offset = offset_from_right.into_inner() as _;
+    unsafe { PostMessageW(window, WM_USER, UM_SET_OFFSET_FROM_RIGHT, LPARAM(offset))? };
+
+    // Enqueue a message for initial metrics fetch
+    unsafe { PostMessageW(window, WM_USER, UM_INITIAL_METRICS, LPARAM(0))? };
+
+    // Enqueue a message for initial z-order update
+    unsafe { PostMessageW(window, WM_USER, UM_INITIAL_Z_ORDER, LPARAM(0))? };
+
     // Enqueue a message for initial paint
     unsafe { PostMessageW(window, WM_USER, UM_INITIAL_PAINT, LPARAM(0))? };
 
-    // Enqueue a message for initial metrics fetch
-    // (This isn't necessary, but it's nice for debugging to have the metrics code run right away.)
-    unsafe { PostMessageW(window, WM_USER, UM_INITIAL_METRICS, LPARAM(0))? };
-
     // Set up timer to fetch metrics.
     // Note: this timer will be destroyed when the window is destroyed. (And in fact we can't destroy it manually, since the window handle will be invalid.)
-    if unsafe { SetTimer(window, IDT_FETCH_TIMER.0, FETCH_TIMER_MS, None) } == 0 {
+    if unsafe {
+        SetCoalescableTimer(
+            window,
+            IDT_FETCH_TIMER.0,
+            FETCH_TIMER_MS,
+            None,
+            FETCH_TIMER_COALESCE,
+        )
+    } == 0
+    {
         return Err(Error::from_win32());
     }
 
     // Set up timer to redraw window periodically.
     // Note: this timer will be destroyed when the window is destroyed. (And in fact we can't destroy it manually, since the window handle will be invalid.)
-    if unsafe { SetTimer(window, IDT_REDRAW_TIMER.0, REDRAW_TIMER_MS, None) } == 0 {
+    if unsafe {
+        SetCoalescableTimer(
+            window,
+            IDT_REDRAW_TIMER.0,
+            REDRAW_TIMER_MS,
+            None,
+            REDRAW_TIMER_COALESCE,
+        )
+    } == 0
+    {
         return Err(Error::from_win32());
     }
 
