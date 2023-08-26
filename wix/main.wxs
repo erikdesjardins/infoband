@@ -122,7 +122,7 @@
                           Name="infoband"
                           Target="[!exe0]"
                           WorkingDirectory="Bin"/>
-                <RegistryValue Root="HKCU" Key="Software\erikdesjardins\infoband" Name="installed" Type="integer" Value="1" KeyPath="yes"/>
+                <RegistryValue Root="HKCU" Key="Software\infoband" Name="installed" Type="integer" Value="1" KeyPath="yes"/>
               </Component>
             </Directory>
         </Directory>

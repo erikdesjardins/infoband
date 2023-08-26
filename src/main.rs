@@ -16,9 +16,11 @@ use log4rs::append::file::FileAppender;
 use log4rs::config::{Appender, Root};
 use log4rs::encode::pattern::PatternEncoder;
 use log4rs::Config;
+use std::env;
 use std::fs::{self, File};
-use std::{env, io};
-use windows::core::Error;
+use std::io;
+use std::path::{Path, PathBuf};
+use windows::core::Result;
 use windows::Win32::Foundation::HINSTANCE;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 
@@ -31,32 +33,66 @@ mod stats;
 mod utils;
 mod window;
 
-fn main() -> Result<(), Error> {
+fn main() -> Result<()> {
     let opt::Cli {
         verbose,
         debug_paint,
     } = argh::from_env();
 
     // Init logging as early as possible.
-    init_logging(verbose);
+    let config = if cfg!(debug_assertions) {
+        // In debug builds, don't create log/config files
+        init_logging(None, verbose);
+        Default::default()
+    } else {
+        // In release (installed) builds, create log/config files in local appdata.
+        let path = make_local_appdata_folder();
+        init_logging(Some(&path.join(LOG_FILE_NAME)), verbose);
+        load_config_file(&path.join(CONFIG_FILE_NAME))
+    };
 
-    let opt::ConfigFile { offset_from_right } = load_config_file();
+    let opt::ConfigFile { offset_from_right } = config;
 
-    let instance = get_module_handle()?;
-    window::make_process_dpi_aware()?;
-    window::create_and_run_message_loop(instance, offset_from_right, debug_paint)?;
+    let instance = get_module_handle();
+
+    if let Err(e) = window::make_process_dpi_aware() {
+        log::error!("Failed to make process DPI aware: {}", e);
+        return Err(e);
+    }
+
+    if let Err(e) = window::create_and_run_message_loop(instance, offset_from_right, debug_paint) {
+        log::error!("Failed to create and run message loop: {}", e);
+        return Err(e);
+    }
 
     Ok(())
 }
 
-fn init_logging(verbose: u8) {
+fn make_local_appdata_folder() -> PathBuf {
+    let Some(local_appdata) = env::var_os("LOCALAPPDATA") else {
+        panic!("Failed to get LOCALAPPDATA environment variable.");
+    };
+
+    let mut path = PathBuf::from(local_appdata);
+    path.push("infoband");
+
+    if let Err(e) = fs::create_dir_all(&path) {
+        panic!(
+            "Failed to create local appdata folder `{}`: {}",
+            path.display(),
+            e
+        );
+    }
+
+    path
+}
+
+fn init_logging(path: Option<&Path>, verbose: u8) {
     log4rs::init_config(
         Config::builder()
             .appender(Appender::builder().build("default", {
                 let encoder = Box::new(PatternEncoder::new("[{date(%Y-%m-%d %H:%M:%S%.3f)} {highlight({level}):5} {target}] {highlight({message})}{n}"));
-                if !cfg!(debug_assertions) {
-                    let mut path = env::current_exe().unwrap();
-                    path.set_file_name(LOG_FILE_NAME);
+                if let Some(path) = path {
                     Box::new(FileAppender::builder().build(path).unwrap())
                 } else {
                     Box::new(
@@ -77,13 +113,10 @@ fn init_logging(verbose: u8) {
     .unwrap();
 }
 
-fn load_config_file() -> opt::ConfigFile {
+fn load_config_file(path: &Path) -> opt::ConfigFile {
     let default_config = opt::ConfigFile::default();
 
-    let mut path = env::current_exe().unwrap();
-    path.set_file_name(CONFIG_FILE_NAME);
-
-    match File::open(&path) {
+    match File::open(path) {
         Ok(file) => match serde_json::from_reader(file) {
             Ok(config) => {
                 log::info!("Loaded config from file `{}`", path.display());
@@ -96,12 +129,12 @@ fn load_config_file() -> opt::ConfigFile {
         },
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
             log::info!("Config file `{}` not found, creating", path.display());
-            match File::create(&path) {
+            match File::create(path) {
                 Ok(file) => match serde_json::to_writer_pretty(file, &default_config) {
                     Ok(()) => {}
                     Err(e) => {
                         log::warn!("Failed to write config file `{}`: {}", path.display(), e);
-                        if let Err(e) = fs::remove_file(&path) {
+                        if let Err(e) = fs::remove_file(path) {
                             log::warn!("...and failed to delete the empty file: {}", e);
                         }
                     }
@@ -117,8 +150,8 @@ fn load_config_file() -> opt::ConfigFile {
     }
 }
 
-fn get_module_handle() -> Result<HINSTANCE, Error> {
+fn get_module_handle() -> HINSTANCE {
     // SAFETY: no safety requirements when passing null
-    let module = unsafe { GetModuleHandleW(None)? };
-    Ok(HINSTANCE::from(module))
+    let module = unsafe { GetModuleHandleW(None).unwrap() };
+    HINSTANCE::from(module)
 }
