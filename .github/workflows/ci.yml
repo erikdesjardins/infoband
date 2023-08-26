@@ -48,7 +48,7 @@ jobs:
       - run: cargo build --release
       - run: dir target/release/infoband.exe
 
-      - run: cargo install cargo-wix
+      - run: cargo install cargo-wix --debug
       - run: cargo wix --nocapture
 
       - uses: softprops/action-gh-release@v1
