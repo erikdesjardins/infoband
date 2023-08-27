@@ -29,6 +29,7 @@ mod macros;
 mod constants;
 mod metrics;
 mod opt;
+mod perf;
 mod stats;
 mod utils;
 mod window;
