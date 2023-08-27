@@ -113,6 +113,10 @@ where
                     .try_into()
                     .unwrap(),
                 CounterId: counter_id,
+                // Note that, per https://learn.microsoft.com/en-us/windows/win32/api/perflib/ns-perflib-perf_instance_header#remarks,
+                // each instance is identified by _both_ its instance id and name combined...
+                // In practice, I do see duplicate instance IDs frequently, but I don't see duplicate names,
+                // so we use the wildcard instance ID here and only filter on the name (below).
                 InstanceId: PERF_WILDCARD_COUNTER,
                 ..Default::default()
             },
