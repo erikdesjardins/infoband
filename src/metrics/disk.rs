@@ -18,7 +18,7 @@ const FILESYSTEM_BYTES_WRITTEN_COUNTER: u32 = 1;
 
 // Always filter to the "default" instance.
 // From introspection, it seems that there are only two instances: "default" and "_Total", which always have the same value.
-const FILESYSTEM_INSTANCE_NAME: &[u8; 7] = b"default";
+const FILESYSTEM_INSTANCE_NAME: &[u8; 6] = b"_Total";
 
 pub struct State {
     queries: PerfQueries<SingleCounter, 2, u64>,
