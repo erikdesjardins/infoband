@@ -1,7 +1,7 @@
 use crate::constants::{IDT_Z_ORDER_TIMER, Z_ORDER_TIMER_COALESCE, Z_ORDER_TIMER_MS};
 use std::cell::Cell;
 use windows::core::{w, Error, Result, HRESULT};
-use windows::Win32::Foundation::{ERROR_SUCCESS, HWND};
+use windows::Win32::Foundation::{ERROR_INVALID_WINDOW_HANDLE, ERROR_SUCCESS, HWND};
 use windows::Win32::UI::WindowsAndMessaging::{
     FindWindowW, GetWindowLongW, KillTimer, SetCoalescableTimer, SetWindowPos, GWL_EXSTYLE,
     HWND_BOTTOM, HWND_TOPMOST, SWP_NOMOVE, SWP_NOSENDCHANGING, SWP_NOSIZE, SWP_NOZORDER,
@@ -19,23 +19,17 @@ use windows::Win32::UI::WindowsAndMessaging::{
 /// https://github.com/dechamps/RudeWindowFixer
 pub struct ZOrder {
     /// The shell window, displaying the Windows taskbar.
-    shell: HWND,
+    shell: Cell<HWND>,
     /// Whether our window is currently topmost.
     currently_topmost: Cell<Option<bool>>,
 }
 
 impl ZOrder {
     pub fn new() -> Result<Self> {
-        let shell = {
-            let res = unsafe { FindWindowW(w!("Shell_TrayWnd"), None) };
-            if res.0 == 0 {
-                return Err(Error::from_win32());
-            }
-            res
-        };
+        let shell = get_shell_window()?;
 
         Ok(Self {
-            shell,
+            shell: Cell::new(shell),
             // Initial state is "unknown".
             // (We always need to call it at least once, since it might not be all the way on the top or bottom.)
             currently_topmost: Cell::new(None),
@@ -120,11 +114,23 @@ impl ZOrder {
     }
 
     fn update_fallible(&self, window: HWND) -> Result<()> {
-        let shell_is_currently_topmost = is_window_topmost(self.shell)?;
+        let is_shell_topmost = self.is_shell_topmost()?;
 
-        self.set_z_order_to(window, shell_is_currently_topmost)?;
+        self.set_z_order_to(window, is_shell_topmost)?;
 
         Ok(())
+    }
+
+    fn is_shell_topmost(&self) -> Result<bool> {
+        match is_window_topmost(self.shell.get()) {
+            Ok(is_topmost) => Ok(is_topmost),
+            Err(e) if e.code() == HRESULT::from(ERROR_INVALID_WINDOW_HANDLE) => {
+                log::warn!("Shell window handle is invalid (explorer crashed?); refetching");
+                self.shell.set(get_shell_window()?);
+                is_window_topmost(self.shell.get())
+            }
+            Err(e) => Err(e),
+        }
     }
 
     fn set_z_order_to(&self, window: HWND, topmost: bool) -> Result<()> {
@@ -146,6 +152,14 @@ impl ZOrder {
 
         Ok(())
     }
+}
+
+fn get_shell_window() -> Result<HWND> {
+    let hwnd = unsafe { FindWindowW(w!("Shell_TrayWnd"), None) };
+    if hwnd.0 == 0 {
+        return Err(Error::from_win32());
+    }
+    Ok(hwnd)
 }
 
 fn is_window_topmost(handle: HWND) -> Result<bool> {
