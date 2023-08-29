@@ -212,6 +212,9 @@ where
         );
 
         for (i, counter) in results.counters.iter().enumerate() {
+            // Consume status from counter fetch
+            WIN32_ERROR(counter.header.dwStatus).ok()?;
+
             assert_eq!(
                 counter.header.dwType,
                 SingleCounter::TYPE,
