@@ -148,6 +148,10 @@ impl Paint {
 
         // Fetch win HDC so we can create temporary mem HDC of the same size.
         let win_hdc = unsafe { GetDC(window) };
+        if win_hdc.is_invalid() {
+            log::warn!("Window has no DC, skipping paint");
+            return Ok(());
+        }
         defer! {
             _ = unsafe { ReleaseDC(window, win_hdc) };
         }
