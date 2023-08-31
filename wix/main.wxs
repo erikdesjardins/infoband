@@ -116,6 +116,19 @@
                     </Directory>
                 </Directory>
             </Directory>
+            <Directory Id="ProgramMenuFolder">
+              <Directory Id="ApplicationProgramsFolder" Name="infoband">
+                <Component Id="ApplicationShortcut" Guid="5d4c36e8-11d5-41ff-8e88-3a874976ff6b">
+                  <Shortcut Id="ApplicationStartMenuShortcut"
+                            Name="infoband"
+                            Description="Windows &quot;DeskBand&quot; displaying cpu/mem/disk/network info."
+                            Target="[!exe0]"
+                            WorkingDirectory="Bin"/>
+                  <RemoveFolder Id="CleanUpShortCut" Directory="ApplicationProgramsFolder" On="uninstall"/>
+                  <RegistryValue Root="HKCU" Key="Software\infoband" Name="installed" Type="integer" Value="1" KeyPath="yes"/>
+                </Component>
+              </Directory>
+            </Directory>
             <Directory Id='StartupFolder'>
               <Component Id="StartupShortcut" Guid="f9867833-f82c-46aa-9dcc-80c02e3743ba">
                 <Shortcut Id="ApplicationStartupShortcut"
@@ -143,6 +156,8 @@
             <ComponentRef Id='License'/>
             
             <ComponentRef Id='binary0'/>
+
+            <ComponentRef Id='ApplicationShortcut'/>
 
             <Feature
                 Id='StartupShortcut'
