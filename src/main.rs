@@ -9,7 +9,7 @@
 // Prevent the automatic console window you get on startup.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use crate::constants::{CONFIG_FILE_NAME, LOG_FILE_NAME};
+use crate::constants::{CONFIG_FILE_NAME, LOG_FILE_NAME, PID_FILE_NAME};
 use log::LevelFilter;
 use log4rs::append::console::{ConsoleAppender, Target};
 use log4rs::append::file::FileAppender;
@@ -20,9 +20,14 @@ use std::env;
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
-use windows::core::Result;
-use windows::Win32::Foundation::HINSTANCE;
+use windows::core::{w, Error, Result};
+use windows::Win32::Foundation::{CloseHandle, HINSTANCE};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::System::ProcessStatus::GetModuleFileNameExW;
+use windows::Win32::System::Threading::{
+    GetCurrentProcessId, OpenProcess, TerminateProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    PROCESS_TERMINATE,
+};
 
 mod macros;
 
@@ -49,10 +54,13 @@ fn main() -> Result<()> {
         // In release (installed) builds, create log/config files in local appdata.
         let path = make_local_appdata_folder();
         init_logging(Some(&path.join(LOG_FILE_NAME)), verbose);
+        kill_and_write_pid_file(&path.join(PID_FILE_NAME));
         load_config_file(&path.join(CONFIG_FILE_NAME))
     };
 
     let opt::ConfigFile { offset_from_right } = config;
+
+    log::info!("Started up infoband {}", env!("CARGO_PKG_VERSION"));
 
     let instance = get_module_handle();
 
@@ -112,6 +120,74 @@ fn init_logging(path: Option<&Path>, verbose: u8) {
             .unwrap(),
     )
     .unwrap();
+}
+
+fn kill_and_write_pid_file(path: &Path) {
+    fn kill_existing_process(path: &Path) {
+        let pid = match fs::read_to_string(path) {
+            Ok(pid) => pid,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return,
+            Err(e) => return log::warn!("Failed to read pid file `{}`: {}", path.display(), e),
+        };
+
+        let pid = match pid.parse::<u32>() {
+            Ok(pid) => pid,
+            Err(e) => return log::warn!("Failed to parse pid file `{}`: {}", path.display(), e),
+        };
+
+        let process = match unsafe {
+            OpenProcess(
+                PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE,
+                false,
+                pid,
+            )
+        } {
+            Ok(process) => process,
+            // This happens normally when the process has already exited.
+            Err(e) => return log::debug!("Failed to open process {}: {}", pid, e),
+        };
+        defer! {
+            if let Err(e) = unsafe { CloseHandle(process) } {
+                log::warn!("Failed to close process {}: {}", pid, e);
+            }
+        }
+
+        let mut name = [0; 4096];
+        let len = match unsafe { GetModuleFileNameExW(process, None, &mut name) } {
+            0 => {
+                return log::warn!(
+                    "Failed to get process name for pid {}: {}",
+                    pid,
+                    Error::from_win32()
+                )
+            }
+            len => len,
+        };
+        let name = &name[..len as usize];
+
+        if !name.ends_with(unsafe { w!("infoband.exe").as_wide() }) {
+            log::debug!(
+                "Not killing process {} (`{}`)",
+                pid,
+                String::from_utf16_lossy(name)
+            );
+        }
+
+        match unsafe { TerminateProcess(process, 0) } {
+            Ok(()) => log::info!("Killed existing instance with pid {}", pid),
+            Err(e) => log::warn!("Failed to terminate process {}: {}", pid, e),
+        }
+    }
+
+    kill_existing_process(path);
+
+    // SAFETY: not unsafe
+    let current_pid = unsafe { GetCurrentProcessId() };
+
+    match fs::write(path, current_pid.to_string()) {
+        Ok(()) => log::debug!("Wrote pid {} to file `{}`", current_pid, path.display()),
+        Err(e) => log::warn!("Failed to write pid file `{}`: {}", path.display(), e),
+    }
 }
 
 fn load_config_file(path: &Path) -> opt::ConfigFile {

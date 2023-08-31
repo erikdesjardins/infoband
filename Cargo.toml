@@ -1,6 +1,6 @@
 [package]
 name = "infoband"
-version = "1.2.4"
+version = "1.3.0"
 authors = ["Erik Desjardins <erikdesjardins@users.noreply.github.com>"]
 description = "Windows \"DeskBand\" displaying cpu/mem/disk/network info."
 repository = "https://github.com/erikdesjardins/infoband"
@@ -9,7 +9,7 @@ edition = "2021"
 
 [dependencies]
 argh = "0.1"
-log4rs = { version = "1.0", features = ["console_appender", "file_appender"] }
+log4rs = { version = "1.0", default-features = false, features = ["console_appender", "file_appender"] }
 log = "0.4"
 memoffset = "0.9"
 serde = { version = "1.0", features = ["derive"] }
@@ -21,6 +21,7 @@ windows = { version = "0.51", features = [
     "Win32_System_DataExchange",
     "Win32_System_LibraryLoader",
     "Win32_System_Performance",
+    "Win32_System_ProcessStatus",
     "Win32_System_SystemInformation",
     "Win32_System_Threading",
     "Win32_UI_Controls",
