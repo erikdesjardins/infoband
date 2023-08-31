@@ -81,6 +81,7 @@ pub const DEFAULT_OFFSET_FROM_RIGHT: Unscaled<i32> = if cfg!(debug_assertions) {
 // File names
 pub const LOG_FILE_NAME: &str = "infoband.log";
 pub const CONFIG_FILE_NAME: &str = "infoband.json";
+pub const PID_FILE_NAME: &str = "infoband.pid";
 
 // User messages
 pub const UM_ENABLE_DEBUG_PAINT: WPARAM = WPARAM(1);
