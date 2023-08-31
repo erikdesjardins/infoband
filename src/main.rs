@@ -54,6 +54,8 @@ fn main() -> Result<()> {
 
     let opt::ConfigFile { offset_from_right } = config;
 
+    log::info!("Started up infoband {}", env!("CARGO_PKG_VERSION"));
+
     let instance = get_module_handle();
 
     if let Err(e) = window::make_process_dpi_aware() {
