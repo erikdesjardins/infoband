@@ -7,6 +7,9 @@ repository = "https://github.com/erikdesjardins/infoband"
 license = "MIT"
 edition = "2021"
 
+[build-dependencies]
+embed-manifest = "1.4"
+
 [dependencies]
 argh = "0.1"
 log4rs = { version = "1.0", default-features = false, features = ["console_appender", "file_appender"] }
