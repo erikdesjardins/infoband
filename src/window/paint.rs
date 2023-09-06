@@ -9,7 +9,9 @@ use std::cell::Cell;
 use std::mem;
 use std::ptr;
 use windows::core::{w, Error, Result};
-use windows::Win32::Foundation::{COLORREF, ERROR_FILE_NOT_FOUND, HWND, POINT, RECT, SIZE};
+use windows::Win32::Foundation::{
+    COLORREF, ERROR_DC_NOT_FOUND, ERROR_FILE_NOT_FOUND, HWND, POINT, RECT, SIZE,
+};
 use windows::Win32::Graphics::Gdi::{
     GetDC, GetMonitorInfoW, MonitorFromPoint, ReleaseDC, AC_SRC_ALPHA, AC_SRC_OVER, BLENDFUNCTION,
     DT_NOCLIP, DT_NOPREFIX, DT_SINGLELINE, HDC, MONITORINFO, MONITOR_DEFAULTTOPRIMARY, RGBQUAD,
@@ -149,8 +151,7 @@ impl Paint {
         // Fetch win HDC so we can create temporary mem HDC of the same size.
         let win_hdc = unsafe { GetDC(window) };
         if win_hdc.is_invalid() {
-            log::warn!("Window has no DC, skipping paint");
-            return Ok(());
+            return Err(Error::from(ERROR_DC_NOT_FOUND));
         }
         defer! {
             _ = unsafe { ReleaseDC(window, win_hdc) };
