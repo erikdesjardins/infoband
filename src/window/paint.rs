@@ -9,7 +9,9 @@ use std::cell::Cell;
 use std::mem;
 use std::ptr;
 use windows::core::{w, Error, Result};
-use windows::Win32::Foundation::{COLORREF, ERROR_FILE_NOT_FOUND, HWND, POINT, RECT, SIZE};
+use windows::Win32::Foundation::{
+    COLORREF, ERROR_DC_NOT_FOUND, ERROR_FILE_NOT_FOUND, HWND, POINT, RECT, SIZE,
+};
 use windows::Win32::Graphics::Gdi::{
     GetDC, GetMonitorInfoW, MonitorFromPoint, ReleaseDC, AC_SRC_ALPHA, AC_SRC_OVER, BLENDFUNCTION,
     DT_NOCLIP, DT_NOPREFIX, DT_SINGLELINE, HDC, MONITORINFO, MONITOR_DEFAULTTOPRIMARY, RGBQUAD,
@@ -29,6 +31,8 @@ pub struct Paint {
     called_buffered_paint_init: (),
     /// Whether to make the window more visible for debugging.
     pub debug: Cell<bool>,
+    /// Whether the last paint was skipped due to initialization failure.
+    pub last_paint_skipped: Cell<bool>,
     /// Offset from the right edge of the monitor, in unscaled pixels.
     pub offset_from_right: Cell<Unscaled<i32>>,
     /// DPI scaling factor of the window.
@@ -63,6 +67,7 @@ impl Paint {
 
         Ok(Self {
             debug: Cell::new(false),
+            last_paint_skipped: Cell::new(false),
             dpi: Cell::new(dpi),
             offset_from_right: Cell::new(offset_from_right),
             size: Cell::new(size),
@@ -149,8 +154,7 @@ impl Paint {
         // Fetch win HDC so we can create temporary mem HDC of the same size.
         let win_hdc = unsafe { GetDC(window) };
         if win_hdc.is_invalid() {
-            log::warn!("Window has no DC, skipping paint");
-            return Ok(());
+            return Err(Error::from(ERROR_DC_NOT_FOUND));
         }
         defer! {
             _ = unsafe { ReleaseDC(window, win_hdc) };
@@ -184,7 +188,17 @@ impl Paint {
                 )
             };
             if buffered_paint == 0 {
-                return Err(Error::from_win32());
+                if !self.last_paint_skipped.replace(true) {
+                    log::warn!(
+                        "BeginBufferedPaint failed, skipping paint (first instance only): {}",
+                        Error::from_win32()
+                    );
+                    return Ok(());
+                }
+            } else {
+                if self.last_paint_skipped.replace(false) {
+                    log::info!("Buffered paint succeeded, resuming paint");
+                }
             }
             (hdc, buffered_paint)
         };
