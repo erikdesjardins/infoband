@@ -64,11 +64,6 @@ fn main() -> Result<()> {
 
     let instance = get_module_handle();
 
-    if let Err(e) = window::make_process_dpi_aware() {
-        log::error!("Failed to make process DPI aware: {}", e);
-        return Err(e);
-    }
-
     if let Err(e) = window::create_and_run_message_loop(instance, offset_from_right, debug_paint) {
         log::error!("Failed to create and run message loop: {}", e);
         return Err(e);

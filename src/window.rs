@@ -7,9 +7,6 @@ use crate::utils::Unscaled;
 use crate::window::proc::window_proc;
 use windows::core::{w, Error, Result, HRESULT, HSTRING};
 use windows::Win32::Foundation::{HINSTANCE, LPARAM};
-use windows::Win32::UI::HiDpi::{
-    SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
-};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DispatchMessageW, GetMessageW, LoadCursorW, PostMessageW, RegisterClassW,
     RegisterShellHookWindow, SetCoalescableTimer, ShowWindow, CS_HREDRAW, CS_VREDRAW,
@@ -22,15 +19,6 @@ mod paint;
 mod proc;
 mod state;
 mod z_order;
-
-/// Make this process HiDPI aware.
-/// Must be called before any other windowing functions.
-pub fn make_process_dpi_aware() -> Result<()> {
-    // SAFETY: not unsafe...
-    unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)? };
-
-    Ok(())
-}
 
 /// Create the toplevel window, start timers for updating it, and pump the windows message loop.
 pub fn create_and_run_message_loop(
