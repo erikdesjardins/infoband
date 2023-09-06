@@ -1,4 +1,4 @@
-use embed_manifest::manifest::{ExecutionLevel, HeapType, MaxVersionTested, SupportedOS};
+use embed_manifest::manifest::{ExecutionLevel, HeapType, MaxVersionTested, SupportedOS, Setting};
 use embed_manifest::{embed_manifest, empty_manifest};
 
 fn main() {
@@ -13,6 +13,7 @@ fn main() {
         .supported_os(SupportedOS::Windows10..=SupportedOS::Windows10)
         .max_version_tested(MaxVersionTested::Windows11Version22H2)
         .requested_execution_level(ExecutionLevel::AsInvoker)
+        .long_path_aware(Setting::Enabled)
         .heap_type(HeapType::SegmentHeap);
     embed_manifest(manifest).expect("unable to embed manifest file");
 
