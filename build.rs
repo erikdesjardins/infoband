@@ -1,5 +1,5 @@
 use embed_manifest::manifest::{
-    DpiAwareness, ExecutionLevel, HeapType, MaxVersionTested, Setting, SupportedOS,
+    ActiveCodePage, DpiAwareness, ExecutionLevel, HeapType, MaxVersionTested, Setting, SupportedOS,
 };
 use embed_manifest::{embed_manifest, empty_manifest};
 
@@ -17,6 +17,7 @@ fn main() {
         .requested_execution_level(ExecutionLevel::AsInvoker)
         .long_path_aware(Setting::Enabled)
         .dpi_awareness(DpiAwareness::PerMonitorV2Only)
+        .active_code_page(ActiveCodePage::Utf8)
         .heap_type(HeapType::SegmentHeap);
     embed_manifest(manifest).expect("unable to embed manifest file");
 
