@@ -193,8 +193,8 @@ impl Paint {
                         "BeginBufferedPaint failed, skipping paint (first instance only): {}",
                         Error::from_win32()
                     );
-                    return Ok(());
                 }
+                return Ok(());
             } else {
                 if self.last_paint_skipped.replace(false) {
                     log::info!("Buffered paint succeeded, resuming paint");
