@@ -26,7 +26,7 @@ jobs:
       - run: rustup component add clippy
 
       - run: |
-          set RUSTFLAGS="-D warnings"
+          $env:RUSTFLAGS="-D warnings"
           cargo clippy
 
   test:
