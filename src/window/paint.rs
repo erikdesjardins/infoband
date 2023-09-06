@@ -31,6 +31,8 @@ pub struct Paint {
     called_buffered_paint_init: (),
     /// Whether to make the window more visible for debugging.
     pub debug: Cell<bool>,
+    /// Whether the last paint was skipped due to initialization failure.
+    pub last_paint_skipped: Cell<bool>,
     /// Offset from the right edge of the monitor, in unscaled pixels.
     pub offset_from_right: Cell<Unscaled<i32>>,
     /// DPI scaling factor of the window.
@@ -65,6 +67,7 @@ impl Paint {
 
         Ok(Self {
             debug: Cell::new(false),
+            last_paint_skipped: Cell::new(false),
             dpi: Cell::new(dpi),
             offset_from_right: Cell::new(offset_from_right),
             size: Cell::new(size),
@@ -185,7 +188,17 @@ impl Paint {
                 )
             };
             if buffered_paint == 0 {
-                return Err(Error::from_win32());
+                if !self.last_paint_skipped.replace(true) {
+                    log::warn!(
+                        "BeginBufferedPaint failed, skipping paint (first instance only): {}",
+                        Error::from_win32()
+                    );
+                    return Ok(());
+                }
+            } else {
+                if self.last_paint_skipped.replace(false) {
+                    log::info!("Buffered paint succeeded, resuming paint");
+                }
             }
             (hdc, buffered_paint)
         };
