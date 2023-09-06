@@ -2,6 +2,7 @@
     non_snake_case,
     non_camel_case_types,
     unstable_name_collisions,
+    clippy::collapsible_else_if,
     clippy::let_unit_value,
     clippy::if_same_then_else
 )]
