@@ -8,6 +8,9 @@ use crate::window::proc::window_proc;
 use windows::core::{w, Error, Result, HRESULT, HSTRING};
 use windows::Win32::Foundation::{HINSTANCE, LPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::System::RemoteDesktop::{
+    WTSRegisterSessionNotification, NOTIFY_FOR_THIS_SESSION,
+};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DispatchMessageW, GetMessageW, LoadCursorW, PostMessageW, RegisterClassW,
     RegisterShellHookWindow, SetCoalescableTimer, ShowWindow, CS_HREDRAW, CS_VREDRAW,
@@ -82,6 +85,12 @@ pub fn create_and_run_message_loop(
 
     // Register window to receive shell hook messages. We use these to follow the z-order state of the taskbar.
     unsafe { RegisterShellHookWindow(window).ok()? };
+
+    // Register window to receive session notifictions. We use these to stop drawing when the session is locked.
+    // The main reason we do this is to avoid weird situations where buffered paint gets stuck in a failed state.
+    // This seems to happen when we attempt to draw when the monitor that our window is on is turned off, e.g. if when waking from sleep,
+    // a different monitor in a multi-monitor setup wakes up first.
+    unsafe { WTSRegisterSessionNotification(window, NOTIFY_FOR_THIS_SESSION)? };
 
     // Enqueue a message to tell the window about debug settings
     if debug_paint {

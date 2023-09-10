@@ -31,10 +31,12 @@ pub struct Paint {
     called_buffered_paint_init: (),
     /// Whether to make the window more visible for debugging.
     pub debug: Cell<bool>,
-    /// Whether the last paint was skipped due to initialization failure.
-    pub last_paint_skipped: Cell<bool>,
     /// Offset from the right edge of the monitor, in unscaled pixels.
     pub offset_from_right: Cell<Unscaled<i32>>,
+    /// Whether to always skip paint attempts.
+    pub skip_paint: Cell<bool>,
+    /// Whether the last paint was skipped due to initialization failure.
+    pub paint_skipped_due_to_error: Cell<bool>,
     /// DPI scaling factor of the window.
     pub dpi: Cell<ScalingFactor>,
     /// Size of the window.
@@ -67,9 +69,10 @@ impl Paint {
 
         Ok(Self {
             debug: Cell::new(false),
-            last_paint_skipped: Cell::new(false),
-            dpi: Cell::new(dpi),
             offset_from_right: Cell::new(offset_from_right),
+            skip_paint: Cell::new(false),
+            paint_skipped_due_to_error: Cell::new(false),
+            dpi: Cell::new(dpi),
             size: Cell::new(size),
             position: Cell::new(position),
             called_buffered_paint_init: {
@@ -86,6 +89,10 @@ impl Paint {
 
     pub fn set_offset_from_right(&self, offset_from_right: Unscaled<i32>) {
         self.offset_from_right.set(offset_from_right);
+    }
+
+    pub fn set_skip_paint(&self, skip: bool) {
+        self.skip_paint.set(skip);
     }
 
     pub fn set_dpi(&self, dpi: u32) -> ScalingFactor {
@@ -148,6 +155,10 @@ impl Paint {
     /// Toplevel paint method, responsible for dealing with paint buffering and updating the window,
     /// but not with drawing any content.
     fn render_fallible(&self, window: HWND, metrics: &Metrics) -> Result<()> {
+        if self.skip_paint.get() {
+            return Ok(());
+        }
+
         let size = self.size.get();
         let position = self.position.get();
 
@@ -188,7 +199,7 @@ impl Paint {
                 )
             };
             if buffered_paint == 0 {
-                if !self.last_paint_skipped.replace(true) {
+                if !self.paint_skipped_due_to_error.replace(true) {
                     log::warn!(
                         "BeginBufferedPaint failed, skipping paint (first instance only): {}",
                         Error::from_win32()
@@ -196,7 +207,7 @@ impl Paint {
                 }
                 return Ok(());
             } else {
-                if self.last_paint_skipped.replace(false) {
+                if self.paint_skipped_due_to_error.replace(false) {
                     log::info!("Buffered paint succeeded, resuming paint");
                 }
             }
