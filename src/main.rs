@@ -22,8 +22,7 @@ use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
 use windows::core::{w, Error, Result};
-use windows::Win32::Foundation::{CloseHandle, HINSTANCE};
-use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::Foundation::CloseHandle;
 use windows::Win32::System::ProcessStatus::GetModuleFileNameExW;
 use windows::Win32::System::Threading::{
     GetCurrentProcessId, OpenProcess, TerminateProcess, PROCESS_QUERY_LIMITED_INFORMATION,
@@ -63,9 +62,7 @@ fn main() -> Result<()> {
 
     log::info!("Started up infoband {}", env!("CARGO_PKG_VERSION"));
 
-    let instance = get_module_handle();
-
-    if let Err(e) = window::create_and_run_message_loop(instance, offset_from_right, debug_paint) {
+    if let Err(e) = window::create_and_run_message_loop(offset_from_right, debug_paint) {
         log::error!("Failed to create and run message loop: {}", e);
         return Err(e);
     }
@@ -221,10 +218,4 @@ fn load_config_file(path: &Path) -> opt::ConfigFile {
             default_config
         }
     }
-}
-
-fn get_module_handle() -> HINSTANCE {
-    // SAFETY: no safety requirements when passing null
-    let module = unsafe { GetModuleHandleW(None).unwrap() };
-    HINSTANCE::from(module)
 }
