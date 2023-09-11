@@ -48,35 +48,41 @@ impl Metrics {
 
     #[inline(never)]
     pub fn fetch(&self) {
-        if let Err(e) = self.fetch_fallible() {
-            log::error!("Metrics fetch failed: {}", e);
-        }
-    }
-
-    fn fetch_fallible(&self) -> Result<()> {
         let time = Instant::now();
         let prev_time = self.prev_time.replace(Some(time));
         let time_delta = prev_time.map(|prev_time| time - prev_time);
 
-        let cpu = self.cpu.fetch_percent()?;
-        let memory = self.memory.fetch_percent()?;
-        let disk = self.disk.fetch_mbyte(time_delta)?;
-        let network = self.network.fetch_mbit(time_delta)?;
+        match self.cpu.fetch_percent() {
+            Ok(cpu) => {
+                log::trace!("Fetched CPU: {:.3}", cpu);
+                self.cpu_percent.push(cpu);
+            }
+            Err(e) => log::error!("Failed to fetch CPU: {}", e),
+        }
 
-        log::trace!(
-            "Fetched samples: cpu={:.3} memory={:.3} disk={:.3} network={:.3}",
-            cpu,
-            memory,
-            disk,
-            network
-        );
+        match self.memory.fetch_percent() {
+            Ok(memory) => {
+                log::trace!("Fetched memory: {:.3}", memory);
+                self.memory_percent.push(memory);
+            }
+            Err(e) => log::error!("Failed to fetch memory: {}", e),
+        }
 
-        self.cpu_percent.push(cpu);
-        self.memory_percent.push(memory);
-        self.disk_mbyte.push(disk);
-        self.network_mbit.push(network);
+        match self.disk.fetch_mbyte(time_delta) {
+            Ok(disk) => {
+                log::trace!("Fetched disk: {:.3}", disk);
+                self.disk_mbyte.push(disk);
+            }
+            Err(e) => log::error!("Failed to fetch disk: {}", e),
+        }
 
-        Ok(())
+        match self.network.fetch_mbit(time_delta) {
+            Ok(network) => {
+                log::trace!("Fetched network: {:.3}", network);
+                self.network_mbit.push(network);
+            }
+            Err(e) => log::error!("Failed to fetch network: {}", e),
+        }
     }
 
     pub fn avg_cpu_percent(&self) -> f64 {
