@@ -41,7 +41,7 @@ impl Metrics {
             memory_percent: Default::default(),
             disk: disk::State::new()?,
             disk_mbyte: Default::default(),
-            network: Default::default(),
+            network: network::State::new()?,
             network_mbit: Default::default(),
         })
     }

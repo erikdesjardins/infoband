@@ -1,5 +1,6 @@
 use crate::utils::Unscaled;
 use windows::Win32::Foundation::WPARAM;
+use windows::Win32::System::Performance::PDH_FMT;
 use windows::Win32::UI::WindowsAndMessaging::{self, TIMERV_DEFAULT_COALESCING};
 
 // Sizing and positioning
@@ -108,6 +109,9 @@ pub const Z_ORDER_TIMER_COALESCE: u32 = TIMERV_DEFAULT_COALESCING; // usually so
 // Metrics
 pub const SAMPLE_COUNT: usize = 8;
 pub const EXPONENTIAL_DECAY_ALPHA: f64 = 0.631; // 0.631^5 = 0.1, so 90% of the weight is for the last 5 samples
+
+// PDH formatting
+pub const PDH_FMT_NOSCALE: PDH_FMT = PDH_FMT(4096);
 
 // Shell hook messages
 pub const HSHELL_WINDOWACTIVATED: WPARAM = WPARAM(0x4);
