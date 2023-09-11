@@ -1,7 +1,8 @@
 use crate::constants::{
     HSHELL_RUDEAPPACTIVATED, HSHELL_WINDOWACTIVATED, IDT_FETCH_TIMER, IDT_REDRAW_TIMER,
     IDT_Z_ORDER_TIMER, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_METRICS, UM_INITIAL_PAINT,
-    UM_INITIAL_Z_ORDER, UM_SET_OFFSET_FROM_RIGHT,
+    UM_INITIAL_Z_ORDER, UM_SET_OFFSET_FROM_RIGHT, WTS_SESSION_LOCK, WTS_SESSION_LOGOFF,
+    WTS_SESSION_LOGON, WTS_SESSION_UNLOCK,
 };
 use crate::metrics::Metrics;
 use crate::utils::{ScaleBy, Unscaled};
@@ -13,7 +14,7 @@ use windows::core::{w, Error, Result};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
     PostQuitMessage, RegisterWindowMessageW, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED,
-    WM_ERASEBKGND, WM_NCCALCSIZE, WM_NCPAINT, WM_PAINT, WM_TIMER, WM_USER,
+    WM_ERASEBKGND, WM_NCCALCSIZE, WM_NCPAINT, WM_PAINT, WM_TIMER, WM_USER, WM_WTSSESSION_CHANGE,
 };
 
 pub struct InfoBand {
@@ -186,6 +187,36 @@ impl ProcHandler for InfoBand {
                 _ => {
                     log::debug!(
                         "Ignoring shellhook message (SHELLHOOK id=0x{:08x} lparam=0x{:012x})",
+                        wparam.0,
+                        lparam.0
+                    );
+                    LRESULT(0)
+                }
+            },
+            WM_WTSSESSION_CHANGE => match wparam {
+                WTS_SESSION_LOGON => {
+                    log::debug!("Resuming paint due to logon (WTS_SESSION_LOGON)");
+                    self.paint.set_skip_paint(false);
+                    LRESULT(0)
+                }
+                WTS_SESSION_LOGOFF => {
+                    log::debug!("Skipping paint due to logoff (WTS_SESSION_LOGOFF)");
+                    self.paint.set_skip_paint(true);
+                    LRESULT(0)
+                }
+                WTS_SESSION_LOCK => {
+                    log::debug!("Skipping paint due to lock (WTS_SESSION_LOCK)");
+                    self.paint.set_skip_paint(true);
+                    LRESULT(0)
+                }
+                WTS_SESSION_UNLOCK => {
+                    log::debug!("Resuming paint due to unlock (WTS_SESSION_UNLOCK)");
+                    self.paint.set_skip_paint(false);
+                    LRESULT(0)
+                }
+                _ => {
+                    log::debug!(
+                        "Ignoring session change message (WM_WTSSESSION_CHANGE id=0x{:08x} lparam=0x{:012x})",
                         wparam.0,
                         lparam.0
                     );

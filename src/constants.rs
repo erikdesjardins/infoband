@@ -1,6 +1,6 @@
 use crate::utils::Unscaled;
 use windows::Win32::Foundation::WPARAM;
-use windows::Win32::UI::WindowsAndMessaging::TIMERV_DEFAULT_COALESCING;
+use windows::Win32::UI::WindowsAndMessaging::{self, TIMERV_DEFAULT_COALESCING};
 
 // Sizing and positioning
 //
@@ -112,3 +112,9 @@ pub const EXPONENTIAL_DECAY_ALPHA: f64 = 0.631; // 0.631^5 = 0.1, so 90% of the 
 // Shell hook messages
 pub const HSHELL_WINDOWACTIVATED: WPARAM = WPARAM(0x4);
 pub const HSHELL_RUDEAPPACTIVATED: WPARAM = WPARAM(0x8004);
+
+// WTS session change messages
+pub const WTS_SESSION_LOGON: WPARAM = WPARAM(WindowsAndMessaging::WTS_SESSION_LOGON as _);
+pub const WTS_SESSION_LOGOFF: WPARAM = WPARAM(WindowsAndMessaging::WTS_SESSION_LOGOFF as _);
+pub const WTS_SESSION_LOCK: WPARAM = WPARAM(WindowsAndMessaging::WTS_SESSION_LOCK as _);
+pub const WTS_SESSION_UNLOCK: WPARAM = WPARAM(WindowsAndMessaging::WTS_SESSION_UNLOCK as _);
