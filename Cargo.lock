@@ -161,7 +161,7 @@ dependencies = [
 
 [[package]]
 name = "infoband"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "argh",
  "embed-manifest",
