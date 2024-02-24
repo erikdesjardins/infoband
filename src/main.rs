@@ -3,8 +3,9 @@
     non_camel_case_types,
     unstable_name_collisions,
     clippy::collapsible_else_if,
+    clippy::if_same_then_else,
     clippy::let_unit_value,
-    clippy::if_same_then_else
+    clippy::manual_non_exhaustive
 )]
 #![deny(unsafe_op_in_unsafe_fn)]
 // Prevent the automatic console window you get on startup.
