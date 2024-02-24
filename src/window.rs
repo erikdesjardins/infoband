@@ -5,7 +5,7 @@ use crate::constants::{
 };
 use crate::utils::Unscaled;
 use crate::window::proc::window_proc;
-use windows::core::{w, Error, Result, HRESULT, HSTRING};
+use windows::core::{w, Error, Result, HRESULT};
 use windows::Win32::Foundation::{HINSTANCE, LPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::RemoteDesktop::{
@@ -164,6 +164,6 @@ pub fn run_message_loop() -> Result<()> {
     if exit_code == 0 {
         Ok(())
     } else {
-        Err(Error::new(HRESULT(exit_code), HSTRING::new()))
+        Err(Error::from_hresult(HRESULT(exit_code)))
     }
 }
