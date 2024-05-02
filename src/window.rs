@@ -142,7 +142,7 @@ pub fn create_and_run_message_loop(
 
     // Show window (without activating/focusing it) after setting it up.
     // Note that layered windows still don't render until you call UpdateLayeredWindow.
-    unsafe { ShowWindow(window, SW_SHOWNA) };
+    _ = unsafe { ShowWindow(window, SW_SHOWNA) };
 
     // Run message loop (will block)
     run_message_loop()?;
