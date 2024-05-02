@@ -25,7 +25,6 @@ pub trait RectExt {
 
     fn with_right_edge_at(self, x: i32) -> Self;
     fn with_left_edge_at(self, x: i32) -> Self;
-    fn with_top_edge_at(self, y: i32) -> Self;
     fn with_vertical_midpoint_at(self, y: i32) -> Self;
 
     fn width(&self) -> i32;
@@ -68,14 +67,6 @@ impl RectExt for RECT {
         Self {
             left: x - self.width(),
             right: x,
-            ..self
-        }
-    }
-
-    fn with_top_edge_at(self, y: i32) -> Self {
-        Self {
-            top: y,
-            bottom: y + self.height(),
             ..self
         }
     }
@@ -207,20 +198,6 @@ mod tests {
         let after = before.with_right_edge_at(20);
         assert_eq!(after.right, 20);
         assert_eq!(after.top, before.top);
-        assert_eq!(after.size(), before.size());
-    }
-
-    #[test]
-    fn with_top_edge_at() {
-        let before = RECT {
-            left: 2,
-            top: 1,
-            right: 12,
-            bottom: 11,
-        };
-        let after = before.with_top_edge_at(20);
-        assert_eq!(after.top, 20);
-        assert_eq!(after.left, before.left);
         assert_eq!(after.size(), before.size());
     }
 
