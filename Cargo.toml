@@ -1,6 +1,6 @@
 [package]
 name = "infoband"
-version = "1.4.6"
+version = "1.4.7"
 authors = ["Erik Desjardins <erikdesjardins@users.noreply.github.com>"]
 description = "Windows \"DeskBand\" displaying cpu/mem/disk/network info."
 repository = "https://github.com/erikdesjardins/infoband"
@@ -17,7 +17,7 @@ log = "0.4"
 memoffset = "0.9"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-windows = { version = "0.57", features = [
+windows = { version = "0.59", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
     "Win32_NetworkManagement_IpHelper",

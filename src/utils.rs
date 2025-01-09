@@ -3,20 +3,6 @@ use std::fmt::{self, Display};
 use serde::{Deserialize, Serialize};
 use windows::Win32::Foundation::{POINT, RECT, SIZE};
 
-pub trait OptionExt {
-    type Target;
-
-    fn get_or_insert_default(&mut self) -> &mut Self::Target;
-}
-
-impl<T: Default> OptionExt for Option<T> {
-    type Target = T;
-
-    fn get_or_insert_default(&mut self) -> &mut Self::Target {
-        self.get_or_insert_with(Default::default)
-    }
-}
-
 pub trait RectExt {
     fn from_size(size: SIZE) -> Self;
 

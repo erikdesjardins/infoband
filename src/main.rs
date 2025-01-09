@@ -147,7 +147,7 @@ fn kill_and_write_pid_file(path: &Path) {
         }
 
         let mut name = [0; 4096];
-        let len = match unsafe { GetModuleFileNameExW(process, None, &mut name) } {
+        let len = match unsafe { GetModuleFileNameExW(Some(process), None, &mut name) } {
             0 => {
                 return log::warn!(
                     "Failed to get process name for pid {}: {}",
