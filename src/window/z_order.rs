@@ -48,7 +48,7 @@ impl ZOrder {
         unsafe {
             SetWindowPos(
                 window,
-                HWND(0),
+                None,
                 0,
                 0,
                 0,
@@ -76,7 +76,7 @@ impl ZOrder {
 
         if unsafe {
             SetCoalescableTimer(
-                window,
+                Some(window),
                 IDT_Z_ORDER_TIMER.0,
                 Z_ORDER_TIMER_MS,
                 None,
@@ -97,7 +97,7 @@ impl ZOrder {
     }
 
     fn kill_timer_fallible(&self, window: HWND) -> Result<()> {
-        let res = unsafe { KillTimer(window, IDT_Z_ORDER_TIMER.0) };
+        let res = unsafe { KillTimer(Some(window), IDT_Z_ORDER_TIMER.0) };
 
         match res {
             Ok(()) => Ok(()),
@@ -139,7 +139,7 @@ impl ZOrder {
         unsafe {
             SetWindowPos(
                 window,
-                if topmost { HWND_TOPMOST } else { HWND_BOTTOM },
+                Some(if topmost { HWND_TOPMOST } else { HWND_BOTTOM }),
                 0,
                 0,
                 0,
@@ -155,11 +155,7 @@ impl ZOrder {
 }
 
 fn get_shell_window() -> Result<HWND> {
-    let hwnd = unsafe { FindWindowW(w!("Shell_TrayWnd"), None) };
-    if hwnd.0 == 0 {
-        return Err(Error::from_win32());
-    }
-    Ok(hwnd)
+    unsafe { FindWindowW(w!("Shell_TrayWnd"), None) }
 }
 
 fn is_window_topmost(handle: HWND) -> Result<bool> {

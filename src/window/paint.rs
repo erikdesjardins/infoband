@@ -163,12 +163,12 @@ impl Paint {
         let position = self.position.get();
 
         // Fetch win HDC so we can create temporary mem HDC of the same size.
-        let win_hdc = unsafe { GetDC(window) };
+        let win_hdc = unsafe { GetDC(Some(window)) };
         if win_hdc.is_invalid() {
             return Err(Error::from(ERROR_DC_NOT_FOUND));
         }
         defer! {
-            _ = unsafe { ReleaseDC(window, win_hdc) };
+            _ = unsafe { ReleaseDC(Some(window), win_hdc) };
         }
 
         // Use buffered paint to draw into temporary mem HDC...
@@ -260,9 +260,9 @@ impl Paint {
                 None,
                 Some(&position),
                 Some(&size),
-                hdc,
+                Some(hdc),
                 Some(&POINT { x: 0, y: 0 }),
-                None,
+                COLORREF(0),
                 Some(&BLENDFUNCTION {
                     BlendOp: AC_SRC_OVER as u8,
                     SourceConstantAlpha: 255,
