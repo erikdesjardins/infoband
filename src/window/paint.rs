@@ -10,7 +10,7 @@ use std::mem;
 use std::ptr;
 use windows::core::{w, Error, Result};
 use windows::Win32::Foundation::{
-    COLORREF, ERROR_DC_NOT_FOUND, ERROR_FILE_NOT_FOUND, HWND, POINT, RECT, SIZE,
+    COLORREF, ERROR_DC_NOT_FOUND, ERROR_EMPTY, ERROR_FILE_NOT_FOUND, HWND, POINT, RECT, SIZE,
 };
 use windows::Win32::Graphics::Gdi::{
     GetDC, GetMonitorInfoW, MonitorFromPoint, ReleaseDC, AC_SRC_ALPHA, AC_SRC_OVER, BLENDFUNCTION,
@@ -35,8 +35,6 @@ pub struct Paint {
     pub offset_from_right: Cell<Unscaled<i32>>,
     /// Whether to always skip paint attempts.
     pub skip_paint: Cell<bool>,
-    /// Whether the last paint was skipped due to initialization failure.
-    pub paint_skipped_due_to_error: Cell<bool>,
     /// DPI scaling factor of the window.
     pub dpi: Cell<ScalingFactor>,
     /// Size of the window.
@@ -71,7 +69,6 @@ impl Paint {
             debug: Cell::new(false),
             offset_from_right: Cell::new(offset_from_right),
             skip_paint: Cell::new(false),
-            paint_skipped_due_to_error: Cell::new(false),
             dpi: Cell::new(dpi),
             size: Cell::new(size),
             position: Cell::new(position),
@@ -101,13 +98,22 @@ impl Paint {
         dpi
     }
 
-    pub fn compute_size_and_position(&self) {
-        if let Err(e) = self.compute_size_and_position_fallible() {
-            log::error!("Update window position failed: {}", e);
+    pub fn update_size_and_position(&self) {
+        match self.compute_size_and_position() {
+            Ok(rc) => {
+                self.size.set(rc.size());
+                self.position.set(rc.top_left_corner());
+            }
+            Err(e) => {
+                log::warn!(
+                    "Update window position failed, preserving old position: {}",
+                    e
+                );
+            }
         }
     }
 
-    fn compute_size_and_position_fallible(&self) -> Result<()> {
+    fn compute_size_and_position(&self) -> Result<RECT> {
         let dpi = self.dpi.get();
 
         // Get primary monitor (which always includes the origin)
@@ -132,17 +138,16 @@ impl Paint {
         // Left edge positioned at the specified width
         let left = right - WINDOW_WIDTH.scale_by(dpi);
 
-        let rc = RECT {
+        if top == bottom || left == right {
+            return Err(Error::new(ERROR_EMPTY.into(), "Draw rectange is empty"));
+        }
+
+        Ok(RECT {
             top,
             bottom,
             left,
             right,
-        };
-
-        self.size.set(rc.size());
-        self.position.set(rc.top_left_corner());
-
-        Ok(())
+        })
     }
 
     /// Paint the window using the window's device context.
@@ -199,17 +204,7 @@ impl Paint {
                 )
             };
             if buffered_paint == 0 {
-                if !self.paint_skipped_due_to_error.replace(true) {
-                    log::warn!(
-                        "BeginBufferedPaint failed, skipping paint (first instance only): {}",
-                        Error::from_win32()
-                    );
-                }
-                return Ok(());
-            } else {
-                if self.paint_skipped_due_to_error.replace(false) {
-                    log::info!("Buffered paint succeeded, resuming paint");
-                }
+                return Err(Error::from_win32());
             }
             (hdc, buffered_paint)
         };
