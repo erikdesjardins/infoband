@@ -17,9 +17,9 @@ use windows::Win32::Graphics::Gdi::{
     DT_NOCLIP, DT_NOPREFIX, DT_SINGLELINE, HDC, MONITORINFO, MONITOR_DEFAULTTOPRIMARY, RGBQUAD,
 };
 use windows::Win32::UI::Controls::{
-    BeginBufferedPaint, BufferedPaintInit, BufferedPaintUnInit, CloseThemeData, DrawThemeTextEx,
-    EndBufferedPaint, GetBufferedPaintBits, GetThemeTextExtent, BPBF_TOPDOWNDIB, BPPF_NOCLIP,
-    BP_PAINTPARAMS, DTTOPTS, DTT_COMPOSITED, DTT_TEXTCOLOR, HTHEME, TEXT_BODYTEXT,
+    BeginBufferedPaint, BufferedPaintClear, BufferedPaintInit, BufferedPaintUnInit, CloseThemeData,
+    DrawThemeTextEx, EndBufferedPaint, GetBufferedPaintBits, GetThemeTextExtent, BPBF_TOPDOWNDIB,
+    BPPF_NOCLIP, BP_PAINTPARAMS, DTTOPTS, DTT_COMPOSITED, DTT_TEXTCOLOR, HTHEME, TEXT_BODYTEXT,
 };
 use windows::Win32::UI::HiDpi::{GetDpiForWindow, OpenThemeDataForDpi};
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -218,6 +218,9 @@ impl Paint {
                 log::error!("EndBufferedPaint failed: {}", e);
             }
         }
+
+        // Clear the temporary mem HDC, which may contain the previous contents of the window.
+        unsafe { BufferedPaintClear(buffered_paint, None)? };
 
         // When debugging is enabled, fill in window background.
         // We have to do this manually because GDI brushes don't support alpha.
