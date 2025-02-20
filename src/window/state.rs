@@ -102,13 +102,13 @@ impl ProcHandler for InfoBand {
                     dpi_raw,
                     100.scale_by(dpi)
                 );
-                self.paint.compute_size_and_position();
+                self.paint.update_size_and_position();
                 self.paint.render(window, &self.metrics);
                 LRESULT(0)
             }
             WM_DISPLAYCHANGE => {
                 log::debug!("Display resolution changed (WM_DISPLAYCHANGE)");
-                self.paint.compute_size_and_position();
+                self.paint.update_size_and_position();
                 self.paint.render(window, &self.metrics);
                 LRESULT(0)
             }
@@ -146,7 +146,7 @@ impl ProcHandler for InfoBand {
                 }
                 UM_INITIAL_PAINT => {
                     log::info!("Initial paint (UM_INITIAL_PAINT)");
-                    self.paint.compute_size_and_position();
+                    self.paint.update_size_and_position();
                     self.paint.render(window, &self.metrics);
                     LRESULT(0)
                 }
