@@ -59,11 +59,15 @@ fn main() -> Result<()> {
         load_config_file(&path.join(CONFIG_FILE_NAME))
     };
 
-    let opt::ConfigFile { offset_from_right } = config;
+    let opt::ConfigFile {
+        offset_from_right,
+        mic_hotkey,
+    } = config;
 
     log::info!("Started up infoband {}", env!("CARGO_PKG_VERSION"));
 
-    if let Err(e) = window::create_and_run_message_loop(offset_from_right, debug_paint) {
+    if let Err(e) = window::create_and_run_message_loop(offset_from_right, mic_hotkey, debug_paint)
+    {
         log::error!("Failed to create and run message loop: {}", e);
         return Err(e);
     }

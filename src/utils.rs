@@ -11,6 +11,7 @@ pub trait RectExt {
 
     fn with_right_edge_at(self, x: i32) -> Self;
     fn with_left_edge_at(self, x: i32) -> Self;
+    fn with_horizontal_midpoint_at(self, y: i32) -> Self;
     fn with_vertical_midpoint_at(self, y: i32) -> Self;
 
     fn width(&self) -> i32;
@@ -53,6 +54,16 @@ impl RectExt for RECT {
         Self {
             left: x - self.width(),
             right: x,
+            ..self
+        }
+    }
+
+    fn with_horizontal_midpoint_at(self, x: i32) -> Self {
+        let extra = self.width() % 2;
+        let half_width = self.width() / 2;
+        Self {
+            left: x - half_width,
+            right: x + half_width + extra,
             ..self
         }
     }
@@ -183,6 +194,34 @@ mod tests {
         };
         let after = before.with_right_edge_at(20);
         assert_eq!(after.right, 20);
+        assert_eq!(after.top, before.top);
+        assert_eq!(after.size(), before.size());
+    }
+
+    #[test]
+    fn with_horizontal_midpoint_at() {
+        let before = RECT {
+            left: 1,
+            top: 2,
+            right: 11,
+            bottom: 12,
+        };
+        let after = before.with_horizontal_midpoint_at(20);
+        assert_eq!(after.left, 15);
+        assert_eq!(after.top, before.top);
+        assert_eq!(after.size(), before.size());
+    }
+
+    #[test]
+    fn with_horizontal_midpoint_at_odd_width() {
+        let before = RECT {
+            left: 1,
+            top: 2,
+            right: 10,
+            bottom: 10,
+        };
+        let after = before.with_horizontal_midpoint_at(20);
+        assert_eq!(after.left, 16);
         assert_eq!(after.top, before.top);
         assert_eq!(after.size(), before.size());
     }

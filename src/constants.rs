@@ -1,5 +1,7 @@
+use crate::opt::MicrophoneHotkey;
 use crate::utils::Unscaled;
 use windows::Win32::Foundation::WPARAM;
+use windows::Win32::UI::Input::KeyboardAndMouse::VK_C;
 use windows::Win32::UI::WindowsAndMessaging::{self, TIMERV_DEFAULT_COALESCING};
 
 // Sizing and positioning
@@ -70,25 +72,41 @@ pub const FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP: Unscaled<i32> = Unscaled::new(15)
 pub const SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP: Unscaled<i32> = Unscaled::new(31);
 pub const LABEL_WIDTH: Unscaled<i32> = Unscaled::new(32);
 pub const RIGHT_COLUMN_WIDTH: Unscaled<i32> = Unscaled::new(*LABEL_WIDTH.as_inner() + 28);
-pub const WINDOW_WIDTH: Unscaled<i32> = Unscaled::new(170);
 pub const DEFAULT_OFFSET_FROM_RIGHT: Unscaled<i32> = if cfg!(debug_assertions) {
     // Shift over when debugging so it's easy to compare with the installed version
     Unscaled::new(575)
 } else {
     Unscaled::new(375)
 };
+// Microphone warning will be placed in the horizontal center of the display, and needs about this much space
+pub const MICROPHONE_WARNING_WIDTH: Unscaled<i32> = Unscaled::new(500);
 
 // File names
 pub const LOG_FILE_NAME: &str = "infoband.log";
 pub const CONFIG_FILE_NAME: &str = "infoband.json";
 pub const PID_FILE_NAME: &str = "infoband.pid";
 
+// Configuration
+pub const DEFAULT_MIC_HOTKEY: Option<MicrophoneHotkey> = if cfg!(debug_assertions) {
+    // Enable by default when debugging so it's easier to test
+    Some(MicrophoneHotkey {
+        virtual_key_code: VK_C.0,
+        win: true,
+        ctrl: false,
+        shift: false,
+        alt: false,
+    })
+} else {
+    None
+};
+
 // User messages
 pub const UM_ENABLE_DEBUG_PAINT: WPARAM = WPARAM(1);
 pub const UM_SET_OFFSET_FROM_RIGHT: WPARAM = WPARAM(2);
 pub const UM_INITIAL_METRICS: WPARAM = WPARAM(3);
-pub const UM_INITIAL_Z_ORDER: WPARAM = WPARAM(4);
-pub const UM_INITIAL_PAINT: WPARAM = WPARAM(5);
+pub const UM_INITIAL_MIC_STATE: WPARAM = WPARAM(4);
+pub const UM_INITIAL_Z_ORDER: WPARAM = WPARAM(5);
+pub const UM_INITIAL_PAINT: WPARAM = WPARAM(6);
 
 // Timer ids
 pub const IDT_FETCH_TIMER: WPARAM = WPARAM(1);
@@ -118,3 +136,6 @@ pub const WTS_SESSION_LOGON: WPARAM = WPARAM(WindowsAndMessaging::WTS_SESSION_LO
 pub const WTS_SESSION_LOGOFF: WPARAM = WPARAM(WindowsAndMessaging::WTS_SESSION_LOGOFF as _);
 pub const WTS_SESSION_LOCK: WPARAM = WPARAM(WindowsAndMessaging::WTS_SESSION_LOCK as _);
 pub const WTS_SESSION_UNLOCK: WPARAM = WPARAM(WindowsAndMessaging::WTS_SESSION_UNLOCK as _);
+
+// Hotkey ids
+pub const HOTKEY_MIC_MUTE: WPARAM = WPARAM(1);

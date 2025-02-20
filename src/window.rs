@@ -1,15 +1,23 @@
 use crate::constants::{
-    FETCH_TIMER_COALESCE, FETCH_TIMER_MS, IDT_FETCH_TIMER, IDT_REDRAW_TIMER, REDRAW_TIMER_COALESCE,
-    REDRAW_TIMER_MS, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_METRICS, UM_INITIAL_PAINT,
-    UM_INITIAL_Z_ORDER, UM_SET_OFFSET_FROM_RIGHT,
+    FETCH_TIMER_COALESCE, FETCH_TIMER_MS, HOTKEY_MIC_MUTE, IDT_FETCH_TIMER, IDT_REDRAW_TIMER,
+    REDRAW_TIMER_COALESCE, REDRAW_TIMER_MS, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_METRICS,
+    UM_INITIAL_MIC_STATE, UM_INITIAL_PAINT, UM_INITIAL_Z_ORDER, UM_SET_OFFSET_FROM_RIGHT,
 };
+use crate::defer;
+use crate::opt::MicrophoneHotkey;
 use crate::utils::Unscaled;
 use crate::window::proc::window_proc;
 use windows::core::{w, Error, Result, HRESULT};
 use windows::Win32::Foundation::{HINSTANCE, LPARAM};
+use windows::Win32::System::Com::{
+    CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE,
+};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::RemoteDesktop::{
     WTSRegisterSessionNotification, NOTIFY_FOR_THIS_SESSION,
+};
+use windows::Win32::UI::Input::KeyboardAndMouse::{
+    RegisterHotKey, MOD_ALT, MOD_CONTROL, MOD_NOREPEAT, MOD_SHIFT, MOD_WIN,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DispatchMessageW, GetMessageW, LoadCursorW, PostMessageW, RegisterClassW,
@@ -19,6 +27,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 mod messages;
+mod microphone;
 mod paint;
 mod proc;
 mod state;
@@ -27,8 +36,21 @@ mod z_order;
 /// Create the toplevel window, start timers for updating it, and pump the windows message loop.
 pub fn create_and_run_message_loop(
     offset_from_right: Unscaled<i32>,
+    mic_hotkey: Option<MicrophoneHotkey>,
     debug_paint: bool,
 ) -> Result<()> {
+    // Initialize COM, to be used by the microphone management code.
+    // Ideally, we would put this in the microphone state code, but the docs suggest that:
+    // > CoUninitialize should be called on application shutdown, as the last call made to the COM library
+    // > after the application hides its main windows and falls through its main message loop.
+    // https://learn.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-couninitialize
+    // ...so it's not clear that uninitializing when the state is dropped is correct.
+    // Thus, since we have to uninitialize in this function anyways, we also initialize here for consistency.
+    unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE).ok()? };
+    defer! {
+        unsafe { CoUninitialize() };
+    };
+
     // SAFETY: no safety requirements when passing null
     let instance = HINSTANCE::from(unsafe { GetModuleHandleW(None)? });
 
@@ -86,6 +108,35 @@ pub fn create_and_run_message_loop(
     // a different monitor in a multi-monitor setup wakes up first.
     unsafe { WTSRegisterSessionNotification(window, NOTIFY_FOR_THIS_SESSION)? };
 
+    // Register hotkey for mic muting.
+    if let Some(mic_hotkey) = &mic_hotkey {
+        let modifiers = {
+            // Always forbid repeat, and add other modifiers as necessary.
+            let mut modifiers = MOD_NOREPEAT;
+            if mic_hotkey.win {
+                modifiers |= MOD_WIN;
+            }
+            if mic_hotkey.shift {
+                modifiers |= MOD_SHIFT;
+            }
+            if mic_hotkey.ctrl {
+                modifiers |= MOD_CONTROL;
+            }
+            if mic_hotkey.alt {
+                modifiers |= MOD_ALT;
+            }
+            modifiers
+        };
+        unsafe {
+            RegisterHotKey(
+                Some(window),
+                HOTKEY_MIC_MUTE.0.try_into().unwrap(),
+                modifiers,
+                u32::from(mic_hotkey.virtual_key_code),
+            )?
+        };
+    }
+
     // Enqueue a message to tell the window about debug settings
     if debug_paint {
         unsafe { PostMessageW(Some(window), WM_USER, UM_ENABLE_DEBUG_PAINT, LPARAM(0))? };
@@ -104,6 +155,11 @@ pub fn create_and_run_message_loop(
 
     // Enqueue a message for initial metrics fetch
     unsafe { PostMessageW(Some(window), WM_USER, UM_INITIAL_METRICS, LPARAM(0))? };
+
+    // Enqueue a message for initial mic state update
+    if mic_hotkey.is_some() {
+        unsafe { PostMessageW(Some(window), WM_USER, UM_INITIAL_MIC_STATE, LPARAM(0))? };
+    }
 
     // Enqueue a message for initial z-order update
     unsafe { PostMessageW(Some(window), WM_USER, UM_INITIAL_Z_ORDER, LPARAM(0))? };

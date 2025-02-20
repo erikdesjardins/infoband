@@ -1,12 +1,13 @@
 use crate::constants::{
-    HSHELL_RUDEAPPACTIVATED, HSHELL_WINDOWACTIVATED, IDT_FETCH_TIMER, IDT_REDRAW_TIMER,
-    IDT_Z_ORDER_TIMER, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_METRICS, UM_INITIAL_PAINT,
-    UM_INITIAL_Z_ORDER, UM_SET_OFFSET_FROM_RIGHT, WTS_SESSION_LOCK, WTS_SESSION_LOGOFF,
-    WTS_SESSION_LOGON, WTS_SESSION_UNLOCK,
+    HOTKEY_MIC_MUTE, HSHELL_RUDEAPPACTIVATED, HSHELL_WINDOWACTIVATED, IDT_FETCH_TIMER,
+    IDT_REDRAW_TIMER, IDT_Z_ORDER_TIMER, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_METRICS,
+    UM_INITIAL_MIC_STATE, UM_INITIAL_PAINT, UM_INITIAL_Z_ORDER, UM_SET_OFFSET_FROM_RIGHT,
+    WTS_SESSION_LOCK, WTS_SESSION_LOGOFF, WTS_SESSION_LOGON, WTS_SESSION_UNLOCK,
 };
 use crate::metrics::Metrics;
 use crate::utils::{ScaleBy, Unscaled};
 use crate::window::messages;
+use crate::window::microphone::Microphone;
 use crate::window::paint::Paint;
 use crate::window::proc::ProcHandler;
 use crate::window::z_order::ZOrder;
@@ -14,7 +15,8 @@ use windows::core::{w, Error, Result};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
     PostQuitMessage, RegisterWindowMessageW, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED,
-    WM_ERASEBKGND, WM_NCCALCSIZE, WM_NCPAINT, WM_PAINT, WM_TIMER, WM_USER, WM_WTSSESSION_CHANGE,
+    WM_ERASEBKGND, WM_HOTKEY, WM_NCCALCSIZE, WM_NCPAINT, WM_PAINT, WM_TIMER, WM_USER,
+    WM_WTSSESSION_CHANGE,
 };
 
 pub struct InfoBand {
@@ -24,6 +26,8 @@ pub struct InfoBand {
     paint: Paint,
     /// Z=order state.
     z_order: ZOrder,
+    /// Microphone state.
+    mic: Microphone,
     /// Performance metrics.
     metrics: Metrics,
 }
@@ -42,6 +46,7 @@ impl ProcHandler for InfoBand {
             shellhook_message,
             paint: Paint::new(window)?,
             z_order: ZOrder::new()?,
+            mic: Microphone::new()?,
             metrics: Metrics::new()?,
         })
     }
@@ -103,13 +108,15 @@ impl ProcHandler for InfoBand {
                     100.scale_by(dpi)
                 );
                 self.paint.update_size_and_position();
-                self.paint.render(window, &self.metrics);
+                self.paint
+                    .render(window, &self.metrics, self.mic.is_muted());
                 LRESULT(0)
             }
             WM_DISPLAYCHANGE => {
                 log::debug!("Display resolution changed (WM_DISPLAYCHANGE)");
                 self.paint.update_size_and_position();
-                self.paint.render(window, &self.metrics);
+                self.paint
+                    .render(window, &self.metrics, self.mic.is_muted());
                 LRESULT(0)
             }
             WM_DESTROY => {
@@ -133,6 +140,11 @@ impl ProcHandler for InfoBand {
                     self.paint.set_offset_from_right(offset_from_right);
                     LRESULT(0)
                 }
+                UM_INITIAL_MIC_STATE => {
+                    log::info!("Initial mic state update (UM_INITIAL_MIC_STATE)");
+                    self.mic.update_muted_state();
+                    LRESULT(0)
+                }
                 UM_INITIAL_METRICS => {
                     log::info!("Initial metrics fetch (UM_INITIAL_METRICS)");
                     self.metrics.fetch();
@@ -147,7 +159,8 @@ impl ProcHandler for InfoBand {
                 UM_INITIAL_PAINT => {
                     log::info!("Initial paint (UM_INITIAL_PAINT)");
                     self.paint.update_size_and_position();
-                    self.paint.render(window, &self.metrics);
+                    self.paint
+                        .render(window, &self.metrics, self.mic.is_muted());
                     LRESULT(0)
                 }
                 _ => {
@@ -223,6 +236,24 @@ impl ProcHandler for InfoBand {
                     LRESULT(0)
                 }
             },
+            WM_HOTKEY => match wparam {
+                HOTKEY_MIC_MUTE => {
+                    let mute = !self.mic.is_muted();
+                    log::debug!("Toggling mic mute (WM_HOTKEY mute={})", mute);
+                    self.mic.set_mute(mute);
+                    self.paint
+                        .render(window, &self.metrics, self.mic.is_muted());
+                    LRESULT(0)
+                }
+                _ => {
+                    log::debug!(
+                        "Ignoring hotkey message (WM_HOTKEY id=0x{:08x} lparam=0x{:012x})",
+                        wparam.0,
+                        lparam.0
+                    );
+                    LRESULT(0)
+                }
+            },
             WM_TIMER => match wparam {
                 IDT_FETCH_TIMER => {
                     log::trace!("Fetching metrics (IDT_FETCH_TIMER)");
@@ -231,7 +262,8 @@ impl ProcHandler for InfoBand {
                 }
                 IDT_REDRAW_TIMER => {
                     log::trace!("Starting repaint (IDT_REDRAW_TIMER)");
-                    self.paint.render(window, &self.metrics);
+                    self.paint
+                        .render(window, &self.metrics, self.mic.is_muted());
                     LRESULT(0)
                 }
                 IDT_Z_ORDER_TIMER => {
