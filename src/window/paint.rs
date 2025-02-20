@@ -1,6 +1,6 @@
 use crate::constants::{
-    FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP, LABEL_WIDTH, RIGHT_COLUMN_WIDTH,
-    SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP, WINDOW_WIDTH,
+    FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP, LABEL_WIDTH, MICROPHONE_WARNING_WIDTH, RIGHT_COLUMN_WIDTH,
+    SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP,
 };
 use crate::defer;
 use crate::metrics::Metrics;
@@ -10,7 +10,7 @@ use std::mem;
 use std::ptr;
 use windows::core::{w, Error, Result};
 use windows::Win32::Foundation::{
-    COLORREF, ERROR_DC_NOT_FOUND, ERROR_EMPTY, ERROR_FILE_NOT_FOUND, HWND, POINT, RECT, SIZE,
+    COLORREF, ERROR_DC_NOT_FOUND, ERROR_EMPTY, ERROR_FILE_NOT_FOUND, HWND, POINT, RECT,
 };
 use windows::Win32::Graphics::Gdi::{
     GetDC, GetMonitorInfoW, MonitorFromPoint, ReleaseDC, AC_SRC_ALPHA, AC_SRC_OVER, BLENDFUNCTION,
@@ -37,10 +37,8 @@ pub struct Paint {
     pub skip_paint: Cell<bool>,
     /// DPI scaling factor of the window.
     pub dpi: Cell<ScalingFactor>,
-    /// Size of the window.
-    pub size: Cell<SIZE>,
-    /// Position of the window.
-    pub position: Cell<POINT>,
+    /// Size and position of the window.
+    pub rect: Cell<RECT>,
 }
 
 impl Drop for Paint {
@@ -59,8 +57,12 @@ impl Paint {
         let dpi = ScalingFactor::from_ratio(dpi, USER_DEFAULT_SCREEN_DPI);
 
         // Window starts out not displayed, with size and position zero.
-        let size = SIZE { cx: 0, cy: 0 };
-        let position = POINT { x: 0, y: 0 };
+        let rect = RECT {
+            top: 0,
+            bottom: 0,
+            left: 0,
+            right: 0,
+        };
 
         // Not using DEFAULT_OFFSET_FROM_RIGHT here so issues with sending config are obvious
         let offset_from_right = Unscaled::new(0);
@@ -70,8 +72,7 @@ impl Paint {
             offset_from_right: Cell::new(offset_from_right),
             skip_paint: Cell::new(false),
             dpi: Cell::new(dpi),
-            size: Cell::new(size),
-            position: Cell::new(position),
+            rect: Cell::new(rect),
             called_buffered_paint_init: {
                 // SAFETY: init and uninit must be called in pairs; after this point, we construct self, so drop will call uninit
                 unsafe { BufferedPaintInit()? }
@@ -100,9 +101,8 @@ impl Paint {
 
     pub fn update_size_and_position(&self) {
         match self.compute_size_and_position() {
-            Ok(rc) => {
-                self.size.set(rc.size());
-                self.position.set(rc.top_left_corner());
+            Ok(rect) => {
+                self.rect.set(rect);
             }
             Err(e) => {
                 log::warn!(
@@ -130,13 +130,16 @@ impl Paint {
             monitor_info
         };
 
+        let midpoint = |a, b| a + (b - a) / 2;
+
         // Height is always the size of the taskbar
         let top = monitor_info.rcWork.bottom;
         let bottom = monitor_info.rcMonitor.bottom;
-        // Right : i32edge the specified distance from the right edge of the screen
+        // Right edge the specified distance from the right edge of the screen
         let right = monitor_info.rcMonitor.right - self.offset_from_right.get().scale_by(dpi);
-        // Left edge positioned at the specified width
-        let left = right - WINDOW_WIDTH.scale_by(dpi);
+        // Left edge positioned at the horizontal center of the display, with enough room for the mic warning
+        let left = midpoint(monitor_info.rcMonitor.left, monitor_info.rcMonitor.right)
+            - MICROPHONE_WARNING_WIDTH.scale_by(dpi) / 2;
 
         if top == bottom || left == right {
             return Err(Error::new(ERROR_EMPTY.into(), "Draw rectange is empty"));
@@ -151,21 +154,22 @@ impl Paint {
     }
 
     /// Paint the window using the window's device context.
-    pub fn render(&self, window: HWND, metrics: &Metrics) {
-        if let Err(e) = self.render_fallible(window, metrics) {
+    pub fn render(&self, window: HWND, metrics: &Metrics, is_muted: bool) {
+        if let Err(e) = self.render_fallible(window, metrics, is_muted) {
             log::error!("Paint failed: {}", e);
         }
     }
 
     /// Toplevel paint method, responsible for dealing with paint buffering and updating the window,
     /// but not with drawing any content.
-    fn render_fallible(&self, window: HWND, metrics: &Metrics) -> Result<()> {
+    fn render_fallible(&self, window: HWND, metrics: &Metrics, is_muted: bool) -> Result<()> {
         if self.skip_paint.get() {
             return Ok(());
         }
 
-        let size = self.size.get();
-        let position = self.position.get();
+        let rect = self.rect.get();
+        let size = rect.size();
+        let position = rect.top_left_corner();
 
         // Fetch win HDC so we can create temporary mem HDC of the same size.
         let win_hdc = unsafe { GetDC(Some(window)) };
@@ -236,7 +240,7 @@ impl Paint {
                         let elem = bits.add(y * cx_row + x);
                         *elem = RGBQUAD {
                             rgbRed: 0x77,
-                            rgbGreen: 0x00,
+                            rgbGreen: 0x77,
                             rgbBlue: 0x00,
                             rgbReserved: 0xff, // alpha
                         };
@@ -246,7 +250,7 @@ impl Paint {
         }
 
         // ...draw the content...
-        self.draw_content(hdc, metrics)?;
+        self.draw_content(hdc, metrics, is_muted)?;
 
         // ...and then write the temporary mem HDC to the window, with alpha blending.
         unsafe {
@@ -272,9 +276,9 @@ impl Paint {
     }
 
     /// Draw the window content to the given device context.
-    fn draw_content(&self, hdc: HDC, metrics: &Metrics) -> Result<()> {
+    fn draw_content(&self, hdc: HDC, metrics: &Metrics, is_muted: bool) -> Result<()> {
         let dpi = self.dpi.get();
-        let size = self.size.get();
+        let size = self.rect.get().size();
 
         let text_style = unsafe {
             OpenThemeDataForDpi(None, w!("TEXTSTYLE"), USER_DEFAULT_SCREEN_DPI.scale_by(dpi))
@@ -288,11 +292,12 @@ impl Paint {
             }
         }
 
-        let cpu = metrics.avg_cpu_percent();
-        let mem = metrics.avg_memory_percent();
-        let net = metrics.avg_network_mbit();
-        let dsk = metrics.avg_disk_mbyte();
-
+        let middle_at = |x, y| {
+            move |r: RECT| {
+                r.with_horizontal_midpoint_at(x)
+                    .with_vertical_midpoint_at(y)
+            }
+        };
         let right_mid_at =
             |x, y| move |r: RECT| r.with_right_edge_at(x).with_vertical_midpoint_at(y);
         let left_mid_at = |x, y| move |r: RECT| r.with_left_edge_at(x).with_vertical_midpoint_at(y);
@@ -300,6 +305,22 @@ impl Paint {
         let text = |text: &str, position: &dyn Fn(RECT) -> RECT| {
             draw_text(hdc, text_style, text, position)
         };
+
+        // Draw microphone warning if unmuted
+
+        if !is_muted {
+            text(
+                ">>>>>>>>>>>>>>>> UNMUTED <<<<<<<<<<<<<<<<",
+                &middle_at(MICROPHONE_WARNING_WIDTH.scale_by(dpi) / 2, size.cy / 2),
+            )?;
+        }
+
+        // Draw metrics
+
+        let cpu = metrics.avg_cpu_percent();
+        let mem = metrics.avg_memory_percent();
+        let net = metrics.avg_network_mbit();
+        let dsk = metrics.avg_disk_mbyte();
 
         let right_column = size.cx - LABEL_WIDTH.scale_by(dpi);
         let left_column = size.cx - RIGHT_COLUMN_WIDTH.scale_by(dpi) - LABEL_WIDTH.scale_by(dpi);
