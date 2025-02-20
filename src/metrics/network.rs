@@ -1,4 +1,3 @@
-use memoffset::offset_of;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::mem;
@@ -23,9 +22,10 @@ impl State {
         }
         assert!(mem::align_of::<BIG_MIB_IFTABLE>() == mem::align_of::<MIB_IFTABLE>());
         assert!(
-            offset_of!(BIG_MIB_IFTABLE, dw_num_entries) == offset_of!(MIB_IFTABLE, dwNumEntries)
+            mem::offset_of!(BIG_MIB_IFTABLE, dw_num_entries)
+                == mem::offset_of!(MIB_IFTABLE, dwNumEntries)
         );
-        assert!(offset_of!(BIG_MIB_IFTABLE, table) == offset_of!(MIB_IFTABLE, table));
+        assert!(mem::offset_of!(BIG_MIB_IFTABLE, table) == mem::offset_of!(MIB_IFTABLE, table));
 
         // SAFETY: MIB_IFTABLE can be safely zero-initialized
         let mut interfaces: BIG_MIB_IFTABLE = unsafe { mem::zeroed() };
