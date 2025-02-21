@@ -158,12 +158,7 @@ where
 
         Ok(queries)
     }
-}
 
-impl<const COUNTERS: usize, CounterValue> PerfQueries<SingleCounter, COUNTERS, CounterValue>
-where
-    CounterValue: Copy + Default,
-{
     /// Query data from perf counters.
     pub fn query_data(&self) -> Result<[CounterValue; COUNTERS]> {
         // Get data from perf counters.
