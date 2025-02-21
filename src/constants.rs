@@ -1,6 +1,6 @@
 use crate::opt::MicrophoneHotkey;
 use crate::utils::Unscaled;
-use windows::Win32::Foundation::WPARAM;
+use windows::Win32::Foundation::{COLORREF, WPARAM};
 use windows::Win32::UI::Input::KeyboardAndMouse::VK_C;
 use windows::Win32::UI::WindowsAndMessaging::{self, TIMERV_DEFAULT_COALESCING};
 
@@ -78,8 +78,12 @@ pub const DEFAULT_OFFSET_FROM_RIGHT: Unscaled<i32> = if cfg!(debug_assertions) {
 } else {
     Unscaled::new(375)
 };
-// Microphone warning will be placed in the horizontal center of the display, and needs about this much space
-pub const MICROPHONE_WARNING_WIDTH: Unscaled<i32> = Unscaled::new(500);
+// Microphone warning will be placed in the horizontal center of the display
+pub const MICROPHONE_WARNING_WIDTH: Unscaled<i32> = Unscaled::new(78); // ~ 48 * 1.618 (golden ratio)
+
+// Colors
+pub const DEBUG_BACKGROUND_COLOR: COLORREF = COLORREF(0x00_77_77); // yellow
+pub const MICROPHONE_WARNING_COLOR: COLORREF = COLORREF(0x00_00_99); // red
 
 // File names
 pub const LOG_FILE_NAME: &str = "infoband.log";
