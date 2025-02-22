@@ -1,6 +1,6 @@
 use crate::constants::{
-    HOTKEY_MIC_MUTE, HSHELL_RUDEAPPACTIVATED, HSHELL_WINDOWACTIVATED, IDT_FETCH_TIMER,
-    IDT_MIC_STATE_TIMER, IDT_REDRAW_TIMER, IDT_Z_ORDER_TIMER, UM_ENABLE_DEBUG_PAINT,
+    HOTKEY_MIC_MUTE, HSHELL_RUDEAPPACTIVATED, HSHELL_WINDOWACTIVATED, IDT_FETCH_AND_REDRAW_TIMER,
+    IDT_MIC_STATE_TIMER, IDT_Z_ORDER_TIMER, REDRAW_EVERY_N_FETCHES, UM_ENABLE_DEBUG_PAINT,
     UM_INITIAL_METRICS, UM_INITIAL_MIC_STATE, UM_INITIAL_PAINT, UM_INITIAL_Z_ORDER,
     UM_SET_OFFSET_FROM_RIGHT, WTS_SESSION_LOCK, WTS_SESSION_LOGOFF, WTS_SESSION_LOGON,
     WTS_SESSION_UNLOCK,
@@ -254,15 +254,15 @@ impl ProcHandler for InfoBand {
                 }
             },
             WM_TIMER => match wparam {
-                IDT_FETCH_TIMER => {
-                    log::trace!("Fetching metrics (IDT_FETCH_TIMER)");
-                    self.metrics.fetch();
-                    LRESULT(0)
-                }
-                IDT_REDRAW_TIMER => {
-                    log::trace!("Starting repaint (IDT_REDRAW_TIMER)");
-                    self.paint
-                        .render(window, &self.metrics, self.mic.is_muted());
+                IDT_FETCH_AND_REDRAW_TIMER => {
+                    log::trace!("Fetching metrics (IDT_FETCH_AND_REDRAW_TIMER)");
+                    let fetch_count = self.metrics.fetch();
+
+                    if fetch_count % REDRAW_EVERY_N_FETCHES == 0 {
+                        log::trace!("Starting repaint (IDT_FETCH_AND_REDRAW_TIMER)");
+                        self.paint
+                            .render(window, &self.metrics, self.mic.is_muted());
+                    }
                     LRESULT(0)
                 }
                 IDT_MIC_STATE_TIMER => {

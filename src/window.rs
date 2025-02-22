@@ -1,7 +1,7 @@
 use crate::constants::{
-    FETCH_TIMER_COALESCE, FETCH_TIMER_MS, HOTKEY_MIC_MUTE, IDT_FETCH_TIMER, IDT_REDRAW_TIMER,
-    REDRAW_TIMER_COALESCE, REDRAW_TIMER_MS, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_METRICS,
-    UM_INITIAL_MIC_STATE, UM_INITIAL_PAINT, UM_INITIAL_Z_ORDER, UM_SET_OFFSET_FROM_RIGHT,
+    FETCH_AND_REDRAW_TIMER_COALESCE, FETCH_TIMER_MS, HOTKEY_MIC_MUTE, IDT_FETCH_AND_REDRAW_TIMER,
+    UM_ENABLE_DEBUG_PAINT, UM_INITIAL_METRICS, UM_INITIAL_MIC_STATE, UM_INITIAL_PAINT,
+    UM_INITIAL_Z_ORDER, UM_SET_OFFSET_FROM_RIGHT,
 };
 use crate::defer;
 use crate::opt::MicrophoneHotkey;
@@ -167,30 +167,15 @@ pub fn create_and_run_message_loop(
     // Enqueue a message for initial paint
     unsafe { PostMessageW(Some(window), WM_USER, UM_INITIAL_PAINT, LPARAM(0))? };
 
-    // Set up timer to fetch metrics.
+    // Set up timer to fetch metrics and redraw.
     // Note: this timer will be destroyed when the window is destroyed. (And in fact we can't destroy it manually, since the window handle will be invalid.)
     if unsafe {
         SetCoalescableTimer(
             Some(window),
-            IDT_FETCH_TIMER.0,
+            IDT_FETCH_AND_REDRAW_TIMER.0,
             FETCH_TIMER_MS,
             None,
-            FETCH_TIMER_COALESCE,
-        )
-    } == 0
-    {
-        return Err(Error::from_win32());
-    }
-
-    // Set up timer to redraw window periodically.
-    // Note: this timer will be destroyed when the window is destroyed. (And in fact we can't destroy it manually, since the window handle will be invalid.)
-    if unsafe {
-        SetCoalescableTimer(
-            Some(window),
-            IDT_REDRAW_TIMER.0,
-            REDRAW_TIMER_MS,
-            None,
-            REDRAW_TIMER_COALESCE,
+            FETCH_AND_REDRAW_TIMER_COALESCE,
         )
     } == 0
     {

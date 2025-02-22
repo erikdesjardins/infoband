@@ -29,6 +29,9 @@ pub struct Metrics {
     network: network::State,
     /// Samples of network bandwidth in megabits per second.
     network_mbit: CircularBuffer<f64, SAMPLE_COUNT>,
+
+    /// Number of times that metrics have been fetched (wrapping).
+    fetch_count: Cell<usize>,
 }
 
 impl Metrics {
@@ -43,11 +46,12 @@ impl Metrics {
             disk_mbyte: Default::default(),
             network: Default::default(),
             network_mbit: Default::default(),
+            fetch_count: Default::default(),
         })
     }
 
     #[inline(never)]
-    pub fn fetch(&self) {
+    pub fn fetch(&self) -> usize {
         let time = Instant::now();
         let prev_time = self.prev_time.replace(Some(time));
         let time_delta = prev_time.map(|prev_time| time - prev_time);
@@ -83,6 +87,10 @@ impl Metrics {
             }
             Err(e) => log::error!("Failed to fetch network: {e}"),
         }
+
+        let new_fetch_count = self.fetch_count.get().wrapping_add(1);
+        self.fetch_count.set(new_fetch_count);
+        new_fetch_count
     }
 
     pub fn avg_cpu_percent(&self) -> f64 {
