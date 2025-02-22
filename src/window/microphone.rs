@@ -2,9 +2,9 @@ use crate::constants::IDT_MIC_STATE_TIMER;
 use listener::ListenerManager;
 use std::cell::{Cell, RefCell};
 use std::ptr;
-use windows::core::Result;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::KillTimer;
+use windows::core::Result;
 
 mod listener;
 

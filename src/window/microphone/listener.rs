@@ -1,16 +1,16 @@
 use crate::constants::{IDT_MIC_STATE_TIMER, MIC_STATE_TIMER_COALESCE, MIC_STATE_TIMER_MS};
 use crate::defer;
-use windows::core::Result;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::Media::Audio::Endpoints::{
     IAudioEndpointVolume, IAudioEndpointVolumeCallback, IAudioEndpointVolumeCallback_Impl,
 };
 use windows::Win32::Media::Audio::{
-    eCapture, IMMDeviceEnumerator, MMDeviceEnumerator, DEVICE_STATE_ACTIVE,
+    DEVICE_STATE_ACTIVE, IMMDeviceEnumerator, MMDeviceEnumerator, eCapture,
 };
-use windows::Win32::System::Com::{CoCreateInstance, CoTaskMemFree, CLSCTX_INPROC_SERVER};
+use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance, CoTaskMemFree};
 use windows::Win32::UI::WindowsAndMessaging::SetCoalescableTimer;
-use windows_core::{implement, Error, HSTRING};
+use windows::core::Result;
+use windows_core::{Error, HSTRING, implement};
 
 pub struct ListenerManager {
     dev_enumerator: IMMDeviceEnumerator,
@@ -70,7 +70,11 @@ impl ListenerManager {
             let id_bytes = unsafe { id.as_wide() };
 
             // Ignore devices we've already registered.
-            if self.registered_endpoints.iter().any(|(i, _)| &**i == id_bytes) {
+            if self
+                .registered_endpoints
+                .iter()
+                .any(|(i, _)| &**i == id_bytes)
+            {
                 continue;
             }
 

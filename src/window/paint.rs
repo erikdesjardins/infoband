@@ -8,25 +8,25 @@ use crate::metrics::Metrics;
 use crate::utils::{RectExt, ScaleBy, ScalingFactor, Unscaled};
 use std::cell::Cell;
 use std::mem;
-use windows::core::{w, Error, Result};
 use windows::Win32::Foundation::{
     COLORREF, ERROR_DC_NOT_FOUND, ERROR_EMPTY, ERROR_FILE_NOT_FOUND, HWND, POINT, RECT,
 };
 use windows::Win32::Graphics::Gdi::{
-    CreateSolidBrush, DeleteObject, FillRect, GetDC, GetMonitorInfoW, MonitorFromPoint, ReleaseDC,
-    AC_SRC_ALPHA, AC_SRC_OVER, BLENDFUNCTION, DT_NOCLIP, DT_NOPREFIX, DT_SINGLELINE, HBRUSH, HDC,
-    MONITORINFO, MONITOR_DEFAULTTOPRIMARY,
+    AC_SRC_ALPHA, AC_SRC_OVER, BLENDFUNCTION, CreateSolidBrush, DT_NOCLIP, DT_NOPREFIX,
+    DT_SINGLELINE, DeleteObject, FillRect, GetDC, GetMonitorInfoW, HBRUSH, HDC,
+    MONITOR_DEFAULTTOPRIMARY, MONITORINFO, MonitorFromPoint, ReleaseDC,
 };
 use windows::Win32::UI::Controls::{
-    BeginBufferedPaint, BufferedPaintInit, BufferedPaintSetAlpha, BufferedPaintUnInit,
-    CloseThemeData, DrawThemeTextEx, EndBufferedPaint, GetThemeTextExtent, BPBF_TOPDOWNDIB,
-    BPPF_ERASE, BPPF_NOCLIP, BP_PAINTPARAMS, DTTOPTS, DTT_COMPOSITED, DTT_TEXTCOLOR, HTHEME,
+    BP_PAINTPARAMS, BPBF_TOPDOWNDIB, BPPF_ERASE, BPPF_NOCLIP, BeginBufferedPaint,
+    BufferedPaintInit, BufferedPaintSetAlpha, BufferedPaintUnInit, CloseThemeData, DTT_COMPOSITED,
+    DTT_TEXTCOLOR, DTTOPTS, DrawThemeTextEx, EndBufferedPaint, GetThemeTextExtent, HTHEME,
     TEXT_BODYTEXT,
 };
 use windows::Win32::UI::HiDpi::{GetDpiForWindow, OpenThemeDataForDpi};
 use windows::Win32::UI::WindowsAndMessaging::{
-    UpdateLayeredWindow, ULW_ALPHA, USER_DEFAULT_SCREEN_DPI,
+    ULW_ALPHA, USER_DEFAULT_SCREEN_DPI, UpdateLayeredWindow,
 };
+use windows::core::{Error, Result, w};
 
 pub struct Paint {
     /// SAFETY: must only be provided after calling `BufferedPaintInit`.

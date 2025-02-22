@@ -1,6 +1,6 @@
 use std::mem;
-use windows::core::Result;
 use windows::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
+use windows::core::Result;
 
 #[derive(Default)]
 pub struct State;

@@ -1,12 +1,12 @@
 use crate::constants::{IDT_Z_ORDER_TIMER, Z_ORDER_TIMER_COALESCE, Z_ORDER_TIMER_MS};
 use std::cell::Cell;
-use windows::core::{w, Error, Result, HRESULT};
 use windows::Win32::Foundation::{ERROR_INVALID_WINDOW_HANDLE, HWND};
 use windows::Win32::UI::WindowsAndMessaging::{
-    FindWindowW, GetWindowLongW, KillTimer, SetCoalescableTimer, SetWindowPos, GWL_EXSTYLE,
-    HWND_BOTTOM, HWND_TOPMOST, SWP_NOMOVE, SWP_NOSENDCHANGING, SWP_NOSIZE, SWP_NOZORDER,
+    FindWindowW, GWL_EXSTYLE, GetWindowLongW, HWND_BOTTOM, HWND_TOPMOST, KillTimer, SWP_NOMOVE,
+    SWP_NOSENDCHANGING, SWP_NOSIZE, SWP_NOZORDER, SetCoalescableTimer, SetWindowPos,
     WINDOW_EX_STYLE, WS_EX_TOPMOST,
 };
+use windows::core::{Error, HRESULT, Result, w};
 
 /// Manages the z-order of the window.
 ///

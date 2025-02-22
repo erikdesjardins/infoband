@@ -1,9 +1,9 @@
 use std::ptr::NonNull;
-use windows::core::Result;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
-    DefWindowProcW, GetWindowLongPtrW, SetWindowLongPtrW, GWLP_USERDATA, WM_NCCREATE, WM_NCDESTROY,
+    DefWindowProcW, GWLP_USERDATA, GetWindowLongPtrW, SetWindowLongPtrW, WM_NCCREATE, WM_NCDESTROY,
 };
+use windows::core::Result;
 
 // This does not require Sync or Send. It appears that window procedures are very thread-local.
 // e.g. https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendmessage
@@ -20,7 +20,7 @@ pub trait ProcHandler: Sized {
     ///
     /// If this returns `None`, the message will be passed to `DefWindowProcW`.
     fn handle(&self, window: HWND, message: u32, wparam: WPARAM, lparam: LPARAM)
-        -> Option<LRESULT>;
+    -> Option<LRESULT>;
 }
 
 pub unsafe extern "system" fn window_proc<H: ProcHandler>(

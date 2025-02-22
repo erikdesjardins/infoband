@@ -12,13 +12,13 @@ use crate::window::microphone::Microphone;
 use crate::window::paint::Paint;
 use crate::window::proc::ProcHandler;
 use crate::window::z_order::ZOrder;
-use windows::core::{w, Error, Result};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
     PostQuitMessage, RegisterWindowMessageW, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED,
     WM_ERASEBKGND, WM_HOTKEY, WM_NCCALCSIZE, WM_NCPAINT, WM_PAINT, WM_TIMER, WM_USER,
     WM_WTSSESSION_CHANGE,
 };
+use windows::core::{Error, Result, w};
 
 pub struct InfoBand {
     /// The message ID of the SHELLHOOK message.

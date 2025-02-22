@@ -1,7 +1,7 @@
 use std::cell::Cell;
-use windows::core::Result;
 use windows::Win32::Foundation::FILETIME;
 use windows::Win32::System::Threading::GetSystemTimes;
+use windows::core::Result;
 
 #[derive(Default)]
 pub struct State {
