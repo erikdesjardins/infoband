@@ -163,7 +163,8 @@ fn kill_and_write_pid_file(path: &Path) {
         };
         let name = &name[..len as usize];
 
-        if !name.ends_with(unsafe { w!("infoband.exe").as_wide() }) {
+        let infoband = w!("infoband.exe");
+        if !name.ends_with(unsafe { infoband.as_wide() }) {
             log::debug!(
                 "Not killing process {} (`{}`)",
                 pid,
