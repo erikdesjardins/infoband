@@ -10,7 +10,7 @@ On first startup, `infoband` will generate a config file at `%localappdata%\info
 
 `infoband` does not apply config changes in real time, but it does kill the previous instance on startup. So my usual workflow for tweaking configuration is to repeatedly save the configuration and run `infoband` to see the result.
 
-Use `offset_from_right` to adjust the position. (In units of unscaled pixels. So `"offset_from_right": 200` will produce a 200px offset at 100% scaling, 300px offset at 150% scaling, etc.)
+Use `offset_from_right` to adjust the position. (In units of scaled pixels. For example, `"offset_from_right": 200` produces a 200 display pixel offset at 100% scaling, 300 display pixel offset at 150% scaling, etc.)
 
 ```json
 {
