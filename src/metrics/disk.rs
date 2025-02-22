@@ -1,7 +1,7 @@
 use crate::perf::{PerfQueries, SingleCounter};
 use std::cell::Cell;
 use std::time::Duration;
-use windows::core::{Result, GUID};
+use windows::core::{GUID, Result};
 
 // Should be the counterset ID of "FileSystem Disk Activity", aka {F596750D-B109-4247-A62F-DEA47A46E505}.
 // This is a counterset of type PERF_COUNTERSET_MULTI_AGGREGATE.

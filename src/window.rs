@@ -7,24 +7,24 @@ use crate::defer;
 use crate::opt::MicrophoneHotkey;
 use crate::utils::Unscaled;
 use crate::window::proc::window_proc;
-use windows::core::{w, Error, Result, HRESULT};
 use windows::Win32::Foundation::{HINSTANCE, LPARAM};
 use windows::Win32::System::Com::{
-    CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE,
+    COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoUninitialize,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::RemoteDesktop::{
-    WTSRegisterSessionNotification, NOTIFY_FOR_THIS_SESSION,
+    NOTIFY_FOR_THIS_SESSION, WTSRegisterSessionNotification,
 };
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    RegisterHotKey, MOD_ALT, MOD_CONTROL, MOD_NOREPEAT, MOD_SHIFT, MOD_WIN,
+    MOD_ALT, MOD_CONTROL, MOD_NOREPEAT, MOD_SHIFT, MOD_WIN, RegisterHotKey,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DispatchMessageW, GetMessageW, LoadCursorW, PostMessageW, RegisterClassW,
-    RegisterShellHookWindow, SetCoalescableTimer, ShowWindow, CS_HREDRAW, CS_VREDRAW,
-    CW_USEDEFAULT, IDC_ARROW, MSG, SW_SHOWNA, WM_USER, WNDCLASSW, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
+    CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, CreateWindowExW, DispatchMessageW, GetMessageW,
+    IDC_ARROW, LoadCursorW, MSG, PostMessageW, RegisterClassW, RegisterShellHookWindow, SW_SHOWNA,
+    SetCoalescableTimer, ShowWindow, WM_USER, WNDCLASSW, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
     WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT, WS_POPUP,
 };
+use windows::core::{Error, HRESULT, Result, w};
 
 mod messages;
 mod microphone;

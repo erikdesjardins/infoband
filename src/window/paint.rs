@@ -1,5 +1,6 @@
 use crate::constants::{
-    FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP, LABEL_WIDTH, MICROPHONE_WARNING_WIDTH, RIGHT_COLUMN_WIDTH,
+    DEBUG_BACKGROUND_COLOR, FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP, LABEL_WIDTH,
+    MICROPHONE_WARNING_COLOR, MICROPHONE_WARNING_WIDTH, RIGHT_COLUMN_WIDTH,
     SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP,
 };
 use crate::defer;
@@ -7,38 +8,43 @@ use crate::metrics::Metrics;
 use crate::utils::{RectExt, ScaleBy, ScalingFactor, Unscaled};
 use std::cell::Cell;
 use std::mem;
-use std::ptr;
-use windows::core::{w, Error, Result};
 use windows::Win32::Foundation::{
     COLORREF, ERROR_DC_NOT_FOUND, ERROR_EMPTY, ERROR_FILE_NOT_FOUND, HWND, POINT, RECT,
 };
 use windows::Win32::Graphics::Gdi::{
-    GetDC, GetMonitorInfoW, MonitorFromPoint, ReleaseDC, AC_SRC_ALPHA, AC_SRC_OVER, BLENDFUNCTION,
-    DT_NOCLIP, DT_NOPREFIX, DT_SINGLELINE, HDC, MONITORINFO, MONITOR_DEFAULTTOPRIMARY, RGBQUAD,
+    AC_SRC_ALPHA, AC_SRC_OVER, BLENDFUNCTION, CreateSolidBrush, DT_NOCLIP, DT_NOPREFIX,
+    DT_SINGLELINE, DeleteObject, FillRect, GetDC, GetMonitorInfoW, HBRUSH, HDC,
+    MONITOR_DEFAULTTOPRIMARY, MONITORINFO, MonitorFromPoint, ReleaseDC,
 };
 use windows::Win32::UI::Controls::{
-    BeginBufferedPaint, BufferedPaintClear, BufferedPaintInit, BufferedPaintUnInit, CloseThemeData,
-    DrawThemeTextEx, EndBufferedPaint, GetBufferedPaintBits, GetThemeTextExtent, BPBF_TOPDOWNDIB,
-    BPPF_NOCLIP, BP_PAINTPARAMS, DTTOPTS, DTT_COMPOSITED, DTT_TEXTCOLOR, HTHEME, TEXT_BODYTEXT,
+    BP_PAINTPARAMS, BPBF_TOPDOWNDIB, BPPF_ERASE, BPPF_NOCLIP, BeginBufferedPaint,
+    BufferedPaintInit, BufferedPaintSetAlpha, BufferedPaintUnInit, CloseThemeData, DTT_COMPOSITED,
+    DTT_TEXTCOLOR, DTTOPTS, DrawThemeTextEx, EndBufferedPaint, GetThemeTextExtent, HTHEME,
+    TEXT_BODYTEXT,
 };
 use windows::Win32::UI::HiDpi::{GetDpiForWindow, OpenThemeDataForDpi};
 use windows::Win32::UI::WindowsAndMessaging::{
-    UpdateLayeredWindow, ULW_ALPHA, USER_DEFAULT_SCREEN_DPI,
+    ULW_ALPHA, USER_DEFAULT_SCREEN_DPI, UpdateLayeredWindow,
 };
+use windows::core::{Error, Result, w};
 
 pub struct Paint {
     /// SAFETY: must only be provided after calling `BufferedPaintInit`.
     called_buffered_paint_init: (),
     /// Whether to make the window more visible for debugging.
-    pub debug: Cell<bool>,
+    debug: Cell<bool>,
     /// Offset from the right edge of the monitor, in unscaled pixels.
-    pub offset_from_right: Cell<Unscaled<i32>>,
+    offset_from_right: Cell<Unscaled<i32>>,
     /// Whether to always skip paint attempts.
-    pub skip_paint: Cell<bool>,
+    skip_paint: Cell<bool>,
     /// DPI scaling factor of the window.
-    pub dpi: Cell<ScalingFactor>,
+    dpi: Cell<ScalingFactor>,
     /// Size and position of the window.
-    pub rect: Cell<RECT>,
+    rect: Cell<RECT>,
+    /// Brush for drawing the debug background.
+    debug_background_brush: HBRUSH,
+    /// Brush for drawing the microphone warning.
+    microphone_warning_brush: HBRUSH,
 }
 
 impl Drop for Paint {
@@ -47,6 +53,14 @@ impl Drop for Paint {
         // SAFETY: init and uninit must be called in pairs; we call init when constructing this type
         if let Err(e) = unsafe { BufferedPaintUnInit() } {
             log::error!("BufferedPaintUnInit failed: {}", e);
+        }
+
+        if !unsafe { DeleteObject(self.debug_background_brush.into()) }.as_bool() {
+            log::error!("DeleteObject failed: {}", Error::from_win32());
+        }
+
+        if !unsafe { DeleteObject(self.microphone_warning_brush.into()) }.as_bool() {
+            log::error!("DeleteObject failed: {}", Error::from_win32());
         }
     }
 }
@@ -67,12 +81,24 @@ impl Paint {
         // Not using DEFAULT_OFFSET_FROM_RIGHT here so issues with sending config are obvious
         let offset_from_right = Unscaled::new(0);
 
+        let debug_background_brush = unsafe { CreateSolidBrush(DEBUG_BACKGROUND_COLOR) };
+        if debug_background_brush.is_invalid() {
+            return Err(Error::from_win32());
+        }
+
+        let microphone_warning_brush = unsafe { CreateSolidBrush(MICROPHONE_WARNING_COLOR) };
+        if microphone_warning_brush.is_invalid() {
+            return Err(Error::from_win32());
+        }
+
         Ok(Self {
             debug: Cell::new(false),
             offset_from_right: Cell::new(offset_from_right),
             skip_paint: Cell::new(false),
             dpi: Cell::new(dpi),
             rect: Cell::new(rect),
+            debug_background_brush,
+            microphone_warning_brush,
             called_buffered_paint_init: {
                 // SAFETY: init and uninit must be called in pairs; after this point, we construct self, so drop will call uninit
                 unsafe { BufferedPaintInit()? }
@@ -201,7 +227,9 @@ impl Paint {
                     BPBF_TOPDOWNDIB,
                     Some(&BP_PAINTPARAMS {
                         cbSize: mem::size_of::<BP_PAINTPARAMS>() as u32,
-                        dwFlags: BPPF_NOCLIP,
+                        // Do not clip the contents (not necessary as we don't have window overlap),
+                        // and make sure to erase the buffer so we don't get artifacts from previous paints.
+                        dwFlags: BPPF_NOCLIP | BPPF_ERASE,
                         ..Default::default()
                     }),
                     &mut hdc,
@@ -219,41 +247,8 @@ impl Paint {
             }
         }
 
-        // Clear the temporary mem HDC, which may contain the previous contents of the window.
-        unsafe { BufferedPaintClear(buffered_paint, None)? };
-
-        // When debugging is enabled, fill in window background.
-        // We have to do this manually because GDI brushes don't support alpha.
-        if self.debug.get() {
-            // Get the bits from the temporary mem HDC, along with the real width of each row (which may be larger than required).
-            let mut bits = ptr::null_mut();
-            let mut cx_row = 0;
-            unsafe { GetBufferedPaintBits(buffered_paint, &mut bits, &mut cx_row)? };
-            assert!(!bits.is_null());
-
-            let cx_row: usize = cx_row.try_into().unwrap();
-            let cx: usize = size.cx.try_into().unwrap();
-            let cy: usize = size.cy.try_into().unwrap();
-            assert!(cx_row >= cx);
-
-            for y in 0..cy {
-                for x in 0..cx {
-                    // SAFETY: this is in bounds of the bitmap allocation per GetBufferedPaintBits contract
-                    unsafe {
-                        let elem = bits.add(y * cx_row + x);
-                        *elem = RGBQUAD {
-                            rgbRed: 0x77,
-                            rgbGreen: 0x77,
-                            rgbBlue: 0x00,
-                            rgbReserved: 0xff, // alpha
-                        };
-                    }
-                }
-            }
-        }
-
         // ...draw the content...
-        self.draw_content(hdc, metrics, is_muted)?;
+        self.draw_content(hdc, buffered_paint, metrics, is_muted)?;
 
         // ...and then write the temporary mem HDC to the window, with alpha blending.
         unsafe {
@@ -279,7 +274,13 @@ impl Paint {
     }
 
     /// Draw the window content to the given device context.
-    fn draw_content(&self, hdc: HDC, metrics: &Metrics, is_muted: bool) -> Result<()> {
+    fn draw_content(
+        &self,
+        hdc: HDC,
+        buffered_paint: isize,
+        metrics: &Metrics,
+        is_muted: bool,
+    ) -> Result<()> {
         let dpi = self.dpi.get();
         let size = self.rect.get().size();
 
@@ -305,15 +306,40 @@ impl Paint {
             |x, y| move |r: RECT| r.with_right_edge_at(x).with_vertical_midpoint_at(y);
         let left_mid_at = |x, y| move |r: RECT| r.with_left_edge_at(x).with_vertical_midpoint_at(y);
 
+        let rect = |r: RECT, color: HBRUSH| {
+            if unsafe { FillRect(hdc, &r, color) } == 0 {
+                return Err(Error::from_win32());
+            }
+            // GDI does not properly support alpha, so we need to set the alpha channel manually afterwards.
+            unsafe { BufferedPaintSetAlpha(buffered_paint, Some(&r), 255)? };
+            Ok(())
+        };
+
         let text = |text: &str, position: &dyn Fn(RECT) -> RECT| {
             draw_text(hdc, text_style, text, position)
         };
 
+        // When debugging is enabled, fill in window background.
+
+        if self.debug.get() {
+            rect(RECT::from_size(size), self.debug_background_brush)?;
+        }
+
         // Draw microphone warning if unmuted
 
         if !is_muted {
+            rect(
+                RECT {
+                    top: 0,
+                    left: 0,
+                    bottom: size.cy,
+                    right: MICROPHONE_WARNING_WIDTH.scale_by(dpi),
+                },
+                self.microphone_warning_brush,
+            )?;
+
             text(
-                ">>>>>>>>>>>>>>>> UNMUTED <<<<<<<<<<<<<<<<",
+                "🎤",
                 &middle_at(MICROPHONE_WARNING_WIDTH.scale_by(dpi) / 2, size.cy / 2),
             )?;
         }

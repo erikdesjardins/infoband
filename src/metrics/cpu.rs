@@ -1,7 +1,7 @@
 use std::cell::Cell;
-use windows::core::Result;
 use windows::Win32::Foundation::FILETIME;
 use windows::Win32::System::Threading::GetSystemTimes;
+use windows::core::Result;
 
 #[derive(Default)]
 pub struct State {
@@ -23,7 +23,7 @@ impl State {
         };
 
         let to_100ns_intervals = |filetime: FILETIME| {
-            u64::from(filetime.dwHighDateTime) << 32 | u64::from(filetime.dwLowDateTime)
+            (u64::from(filetime.dwHighDateTime) << 32) | u64::from(filetime.dwLowDateTime)
         };
 
         let idle = to_100ns_intervals(idle);

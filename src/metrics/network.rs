@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use std::mem;
 use std::ptr::addr_of_mut;
 use std::time::Duration;
-use windows::core::Result;
 use windows::Win32::Foundation::WIN32_ERROR;
 use windows::Win32::NetworkManagement::IpHelper::{GetIfTable, MIB_IFROW, MIB_IFTABLE};
+use windows::core::Result;
 
 #[derive(Default)]
 pub struct State {

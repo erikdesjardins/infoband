@@ -13,22 +13,22 @@
 
 use crate::constants::{CONFIG_FILE_NAME, LOG_FILE_NAME, PID_FILE_NAME};
 use log::LevelFilter;
+use log4rs::Config;
 use log4rs::append::console::{ConsoleAppender, Target};
 use log4rs::append::file::FileAppender;
 use log4rs::config::{Appender, Root};
 use log4rs::encode::pattern::PatternEncoder;
-use log4rs::Config;
 use std::env;
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
-use windows::core::{w, Error, Result};
 use windows::Win32::Foundation::CloseHandle;
 use windows::Win32::System::ProcessStatus::GetModuleFileNameExW;
 use windows::Win32::System::Threading::{
-    GetCurrentProcessId, OpenProcess, TerminateProcess, PROCESS_QUERY_LIMITED_INFORMATION,
-    PROCESS_TERMINATE,
+    GetCurrentProcessId, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_TERMINATE,
+    TerminateProcess,
 };
+use windows::core::{Error, Result, w};
 
 mod macros;
 
@@ -157,13 +157,14 @@ fn kill_and_write_pid_file(path: &Path) {
                     "Failed to get process name for pid {}: {}",
                     pid,
                     Error::from_win32()
-                )
+                );
             }
             len => len,
         };
         let name = &name[..len as usize];
 
-        if !name.ends_with(unsafe { w!("infoband.exe").as_wide() }) {
+        let infoband = w!("infoband.exe");
+        if !name.ends_with(unsafe { infoband.as_wide() }) {
             log::debug!(
                 "Not killing process {} (`{}`)",
                 pid,

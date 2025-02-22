@@ -1,6 +1,6 @@
 use crate::opt::MicrophoneHotkey;
 use crate::utils::Unscaled;
-use windows::Win32::Foundation::WPARAM;
+use windows::Win32::Foundation::{COLORREF, WPARAM};
 use windows::Win32::UI::Input::KeyboardAndMouse::VK_C;
 use windows::Win32::UI::WindowsAndMessaging::{self, TIMERV_DEFAULT_COALESCING};
 
@@ -78,8 +78,12 @@ pub const DEFAULT_OFFSET_FROM_RIGHT: Unscaled<i32> = if cfg!(debug_assertions) {
 } else {
     Unscaled::new(375)
 };
-// Microphone warning will be placed in the horizontal center of the display, and needs about this much space
-pub const MICROPHONE_WARNING_WIDTH: Unscaled<i32> = Unscaled::new(500);
+// Microphone warning will be placed in the horizontal center of the display
+pub const MICROPHONE_WARNING_WIDTH: Unscaled<i32> = Unscaled::new(78); // ~ 48 * 1.618 (golden ratio)
+
+// Colors
+pub const DEBUG_BACKGROUND_COLOR: COLORREF = COLORREF(0x00_77_77); // yellow
+pub const MICROPHONE_WARNING_COLOR: COLORREF = COLORREF(0x00_00_99); // red
 
 // File names
 pub const LOG_FILE_NAME: &str = "infoband.log";
@@ -111,16 +115,19 @@ pub const UM_INITIAL_PAINT: WPARAM = WPARAM(6);
 // Timer ids
 pub const IDT_FETCH_TIMER: WPARAM = WPARAM(1);
 pub const IDT_REDRAW_TIMER: WPARAM = WPARAM(2);
-pub const IDT_Z_ORDER_TIMER: WPARAM = WPARAM(3);
+pub const IDT_MIC_STATE_TIMER: WPARAM = WPARAM(3);
+pub const IDT_Z_ORDER_TIMER: WPARAM = WPARAM(4);
 
 // Timer intervals
 pub const FETCH_TIMER_MS: u32 = 1000;
 pub const REDRAW_TIMER_MS: u32 = 5 * 1000;
+pub const MIC_STATE_TIMER_MS: u32 = 10;
 pub const Z_ORDER_TIMER_MS: u32 = 50;
 
 // Timer coalescing delays
 pub const FETCH_TIMER_COALESCE: u32 = 1000;
 pub const REDRAW_TIMER_COALESCE: u32 = 1000;
+pub const MIC_STATE_TIMER_COALESCE: u32 = TIMERV_DEFAULT_COALESCING; // usually something short like 32ms
 pub const Z_ORDER_TIMER_COALESCE: u32 = TIMERV_DEFAULT_COALESCING; // usually something short like 32ms
 
 // Metrics

@@ -1,24 +1,22 @@
-use std::cell::Cell;
+use crate::constants::IDT_MIC_STATE_TIMER;
+use listener::ListenerManager;
+use std::cell::{Cell, RefCell};
 use std::ptr;
+use windows::Win32::Foundation::HWND;
+use windows::Win32::UI::WindowsAndMessaging::KillTimer;
 use windows::core::Result;
-use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
-use windows::Win32::Media::Audio::{
-    eCapture, IMMDeviceEnumerator, MMDeviceEnumerator, DEVICE_STATE_ACTIVE,
-};
-use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_INPROC_SERVER};
+
+mod listener;
 
 pub struct Microphone {
-    dev_enumerator: IMMDeviceEnumerator,
+    listener: RefCell<ListenerManager>,
     is_muted: Cell<bool>,
 }
 
 impl Microphone {
-    pub fn new() -> Result<Self> {
-        let dev_enumerator =
-            unsafe { CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_INPROC_SERVER)? };
-
+    pub fn new(window: HWND) -> Result<Self> {
         Ok(Self {
-            dev_enumerator,
+            listener: RefCell::new(ListenerManager::new(window)?),
             // Assume muted in initial state, to avoid showing the microphone warning banner on startup.
             is_muted: Cell::new(true),
         })
@@ -28,6 +26,28 @@ impl Microphone {
         self.is_muted.get()
     }
 
+    pub fn kill_timer(&self, window: HWND) {
+        if let Err(e) = self.kill_timer_fallible(window) {
+            log::error!("Killing mic update timer failed: {}", e);
+        }
+    }
+
+    fn kill_timer_fallible(&self, window: HWND) -> Result<()> {
+        unsafe { KillTimer(Some(window), IDT_MIC_STATE_TIMER.0) }
+    }
+
+    pub fn refresh_devices(&self) {
+        if let Err(e) = self.refresh_devices_fallible() {
+            log::error!("Refreshing active microphones failed: {}", e);
+        }
+    }
+
+    fn refresh_devices_fallible(&self) -> Result<()> {
+        self.listener.borrow_mut().refresh_endpoints()?;
+
+        Ok(())
+    }
+
     pub fn update_muted_state(&self) {
         if let Err(e) = self.update_muted_state_fallible() {
             log::error!("Updating muted state failed: {}", e);
@@ -35,11 +55,9 @@ impl Microphone {
     }
 
     fn update_muted_state_fallible(&self) -> Result<()> {
-        let endpoints = self.get_all_active_devices()?;
-
         let mut all_muted = true;
 
-        for endpoint in endpoints {
+        for endpoint in self.listener.borrow().endpoints() {
             let mute = unsafe { endpoint.GetMute()? };
             if !mute.as_bool() {
                 all_muted = false;
@@ -59,37 +77,10 @@ impl Microphone {
     }
 
     fn set_mute_fallible(&self, mute: bool) -> Result<()> {
-        let endpoints = self.get_all_active_devices()?;
-
-        let mut all_muted = true;
-
-        for endpoint in endpoints {
+        for endpoint in self.listener.borrow().endpoints() {
             unsafe { endpoint.SetMute(mute, ptr::null())? };
-            if !mute {
-                all_muted = false;
-            }
         }
 
-        self.is_muted.set(all_muted);
-
         Ok(())
-    }
-
-    fn get_all_active_devices(&self) -> Result<Vec<IAudioEndpointVolume>> {
-        let endpoints = unsafe {
-            self.dev_enumerator
-                .EnumAudioEndpoints(eCapture, DEVICE_STATE_ACTIVE)?
-        };
-
-        let count = unsafe { endpoints.GetCount()? };
-
-        (0..count)
-            .map(|i| {
-                let device = unsafe { endpoints.Item(i)? };
-                let endpoint =
-                    unsafe { device.Activate::<IAudioEndpointVolume>(CLSCTX_INPROC_SERVER, None)? };
-                Ok(endpoint)
-            })
-            .collect()
     }
 }
