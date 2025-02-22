@@ -115,16 +115,19 @@ pub const UM_INITIAL_PAINT: WPARAM = WPARAM(6);
 // Timer ids
 pub const IDT_FETCH_TIMER: WPARAM = WPARAM(1);
 pub const IDT_REDRAW_TIMER: WPARAM = WPARAM(2);
-pub const IDT_Z_ORDER_TIMER: WPARAM = WPARAM(3);
+pub const IDT_MIC_STATE_TIMER: WPARAM = WPARAM(3);
+pub const IDT_Z_ORDER_TIMER: WPARAM = WPARAM(4);
 
 // Timer intervals
 pub const FETCH_TIMER_MS: u32 = 1000;
 pub const REDRAW_TIMER_MS: u32 = 5 * 1000;
+pub const MIC_STATE_TIMER_MS: u32 = 10;
 pub const Z_ORDER_TIMER_MS: u32 = 50;
 
 // Timer coalescing delays
 pub const FETCH_TIMER_COALESCE: u32 = 1000;
 pub const REDRAW_TIMER_COALESCE: u32 = 1000;
+pub const MIC_STATE_TIMER_COALESCE: u32 = TIMERV_DEFAULT_COALESCING; // usually something short like 32ms
 pub const Z_ORDER_TIMER_COALESCE: u32 = TIMERV_DEFAULT_COALESCING; // usually something short like 32ms
 
 // Metrics

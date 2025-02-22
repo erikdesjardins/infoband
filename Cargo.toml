@@ -37,6 +37,7 @@ windows = { version = "0.59", features = [
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_WindowsAndMessaging",
 ] }
+windows-core = { version = "0.59", default-features = false } # Needed only for #[implement(ComInterface)].
 
 [profile.release]
 panic = "abort"

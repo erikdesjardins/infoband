@@ -1,8 +1,9 @@
 use crate::constants::{
     HOTKEY_MIC_MUTE, HSHELL_RUDEAPPACTIVATED, HSHELL_WINDOWACTIVATED, IDT_FETCH_TIMER,
-    IDT_REDRAW_TIMER, IDT_Z_ORDER_TIMER, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_METRICS,
-    UM_INITIAL_MIC_STATE, UM_INITIAL_PAINT, UM_INITIAL_Z_ORDER, UM_SET_OFFSET_FROM_RIGHT,
-    WTS_SESSION_LOCK, WTS_SESSION_LOGOFF, WTS_SESSION_LOGON, WTS_SESSION_UNLOCK,
+    IDT_MIC_STATE_TIMER, IDT_REDRAW_TIMER, IDT_Z_ORDER_TIMER, UM_ENABLE_DEBUG_PAINT,
+    UM_INITIAL_METRICS, UM_INITIAL_MIC_STATE, UM_INITIAL_PAINT, UM_INITIAL_Z_ORDER,
+    UM_SET_OFFSET_FROM_RIGHT, WTS_SESSION_LOCK, WTS_SESSION_LOGOFF, WTS_SESSION_LOGON,
+    WTS_SESSION_UNLOCK,
 };
 use crate::metrics::Metrics;
 use crate::utils::{ScaleBy, Unscaled};
@@ -46,7 +47,7 @@ impl ProcHandler for InfoBand {
             shellhook_message,
             paint: Paint::new(window)?,
             z_order: ZOrder::new()?,
-            mic: Microphone::new()?,
+            mic: Microphone::new(window)?,
             metrics: Metrics::new()?,
         })
     }
@@ -142,6 +143,7 @@ impl ProcHandler for InfoBand {
                 }
                 UM_INITIAL_MIC_STATE => {
                     log::info!("Initial mic state update (UM_INITIAL_MIC_STATE)");
+                    self.mic.refresh_devices();
                     self.mic.update_muted_state();
                     LRESULT(0)
                 }
@@ -240,9 +242,8 @@ impl ProcHandler for InfoBand {
                 HOTKEY_MIC_MUTE => {
                     let mute = !self.mic.is_muted();
                     log::debug!("Toggling mic mute (WM_HOTKEY mute={})", mute);
+                    self.mic.refresh_devices();
                     self.mic.set_mute(mute);
-                    self.paint
-                        .render(window, &self.metrics, self.mic.is_muted());
                     LRESULT(0)
                 }
                 _ => {
@@ -264,6 +265,21 @@ impl ProcHandler for InfoBand {
                     log::trace!("Starting repaint (IDT_REDRAW_TIMER)");
                     self.paint
                         .render(window, &self.metrics, self.mic.is_muted());
+                    LRESULT(0)
+                }
+                IDT_MIC_STATE_TIMER => {
+                    self.mic.kill_timer(window);
+                    let was_muted = self.mic.is_muted();
+                    self.mic.update_muted_state();
+                    let now_muted = self.mic.is_muted();
+                    log::debug!(
+                        "Checking mic state (IDT_MIC_STATE_TIMER was_muted={} now_muted={})",
+                        was_muted,
+                        now_muted
+                    );
+                    if was_muted != now_muted {
+                        self.paint.render(window, &self.metrics, now_muted);
+                    }
                     LRESULT(0)
                 }
                 IDT_Z_ORDER_TIMER => {
