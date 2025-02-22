@@ -238,10 +238,20 @@ impl ProcHandler for InfoBand {
             },
             WM_HOTKEY => match wparam {
                 HOTKEY_MIC_MUTE => {
-                    let mute = !self.mic.is_muted();
-                    log::debug!("Toggling mic mute (WM_HOTKEY mute={mute})");
+                    // Refresh to pick up any new devices here.
+                    // We only do this on hotkey press to avoid unnecessary work.
                     self.mic.refresh_devices();
-                    self.mic.set_mute(mute);
+
+                    let was_muted = self.mic.is_muted();
+                    self.mic.set_mute(!was_muted);
+                    self.mic.update_muted_state();
+                    let now_muted = self.mic.is_muted();
+                    log::debug!(
+                        "Toggled mic mute (WM_HOTKEY was_muted={was_muted} now_muted={now_muted})"
+                    );
+                    if was_muted != now_muted {
+                        self.paint.render(window, &self.metrics, now_muted);
+                    }
                     LRESULT(0)
                 }
                 _ => {
