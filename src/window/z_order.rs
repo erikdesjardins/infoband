@@ -1,7 +1,7 @@
 use crate::constants::{IDT_Z_ORDER_TIMER, Z_ORDER_TIMER_COALESCE, Z_ORDER_TIMER_MS};
 use std::cell::Cell;
 use windows::core::{w, Error, Result, HRESULT};
-use windows::Win32::Foundation::{ERROR_INVALID_WINDOW_HANDLE, ERROR_SUCCESS, HWND};
+use windows::Win32::Foundation::{ERROR_INVALID_WINDOW_HANDLE, HWND};
 use windows::Win32::UI::WindowsAndMessaging::{
     FindWindowW, GetWindowLongW, KillTimer, SetCoalescableTimer, SetWindowPos, GWL_EXSTYLE,
     HWND_BOTTOM, HWND_TOPMOST, SWP_NOMOVE, SWP_NOSENDCHANGING, SWP_NOSIZE, SWP_NOZORDER,
@@ -71,9 +71,7 @@ impl ZOrder {
     }
 
     fn queue_update_fallible(&self, window: HWND) -> Result<()> {
-        // Debounce the update by killing the existing timer.
-        self.kill_timer_fallible(window)?;
-
+        // If there is an existing timer running, this will overwrite it, producing a debounce effect.
         if unsafe {
             SetCoalescableTimer(
                 Some(window),
@@ -97,13 +95,7 @@ impl ZOrder {
     }
 
     fn kill_timer_fallible(&self, window: HWND) -> Result<()> {
-        let res = unsafe { KillTimer(Some(window), IDT_Z_ORDER_TIMER.0) };
-
-        match res {
-            Ok(()) => Ok(()),
-            Err(e) if e.code() == HRESULT::from(ERROR_SUCCESS) => Ok(()),
-            Err(e) => Err(e),
-        }
+        unsafe { KillTimer(Some(window), IDT_Z_ORDER_TIMER.0) }
     }
 
     /// Set our window's z-order to match the taskbar's.

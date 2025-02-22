@@ -1,7 +1,7 @@
 use crate::constants::{IDT_MIC_STATE_TIMER, MIC_STATE_TIMER_COALESCE, MIC_STATE_TIMER_MS};
 use crate::defer;
 use windows::core::Result;
-use windows::Win32::Foundation::{ERROR_SUCCESS, HWND};
+use windows::Win32::Foundation::HWND;
 use windows::Win32::Media::Audio::Endpoints::{
     IAudioEndpointVolume, IAudioEndpointVolumeCallback, IAudioEndpointVolumeCallback_Impl,
 };
@@ -9,8 +9,8 @@ use windows::Win32::Media::Audio::{
     eCapture, IMMDeviceEnumerator, MMDeviceEnumerator, DEVICE_STATE_ACTIVE,
 };
 use windows::Win32::System::Com::{CoCreateInstance, CoTaskMemFree, CLSCTX_INPROC_SERVER};
-use windows::Win32::UI::WindowsAndMessaging::{KillTimer, SetCoalescableTimer};
-use windows_core::{implement, Error, HRESULT, HSTRING};
+use windows::Win32::UI::WindowsAndMessaging::SetCoalescableTimer;
+use windows_core::{implement, Error, HSTRING};
 
 pub struct ListenerManager {
     dev_enumerator: IMMDeviceEnumerator,
@@ -41,12 +41,6 @@ impl ListenerManager {
             listener: IAudioEndpointVolumeCallback::from(MicrophoneListener { window }),
             registered_endpoints: Vec::new(),
         })
-    }
-
-    pub fn kill_timer(&self, window: HWND) {
-        if let Err(e) = kill_timer_fallible(window) {
-            log::error!("Killing mic update timer failed: {}", e);
-        }
     }
 
     pub fn endpoints(&self) -> impl Iterator<Item = &IAudioEndpointVolume> {
@@ -107,15 +101,9 @@ impl IAudioEndpointVolumeCallback_Impl for MicrophoneListener_Impl {
         &self,
         _: *mut windows::Win32::Media::Audio::AUDIO_VOLUME_NOTIFICATION_DATA,
     ) -> Result<()> {
-        self.on_notify()
-    }
-}
+        // WARNING: this may be called from another thread, so we can only do thread-safe operations here.
 
-impl MicrophoneListener {
-    fn on_notify(&self) -> Result<()> {
-        // Debounce the update by killing the existing timer.
-        kill_timer_fallible(self.window)?;
-
+        // If there is an existing timer running, this will overwrite it, producing a debounce effect.
         if unsafe {
             SetCoalescableTimer(
                 Some(self.window),
@@ -130,15 +118,5 @@ impl MicrophoneListener {
         }
 
         Ok(())
-    }
-}
-
-fn kill_timer_fallible(window: HWND) -> Result<()> {
-    let res = unsafe { KillTimer(Some(window), IDT_MIC_STATE_TIMER.0) };
-
-    match res {
-        Ok(()) => Ok(()),
-        Err(e) if e.code() == HRESULT::from(ERROR_SUCCESS) => Ok(()),
-        Err(e) => Err(e),
     }
 }
