@@ -12,6 +12,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use crate::constants::{CONFIG_FILE_NAME, LOG_FILE_NAME, PID_FILE_NAME};
+use constants::EXISTING_PROCESS_SHUTDOWN_MS;
 use log::LevelFilter;
 use log4rs::Config;
 use log4rs::append::console::{ConsoleAppender, Target};
@@ -22,11 +23,11 @@ use std::env;
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
-use windows::Win32::Foundation::CloseHandle;
+use windows::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0, WAIT_TIMEOUT};
 use windows::Win32::System::ProcessStatus::GetModuleFileNameExW;
 use windows::Win32::System::Threading::{
-    GetCurrentProcessId, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_TERMINATE,
-    TerminateProcess,
+    GetCurrentProcessId, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE,
+    PROCESS_TERMINATE, TerminateProcess, WaitForSingleObject,
 };
 use windows::core::{Error, Result, w};
 
@@ -135,7 +136,7 @@ fn kill_and_write_pid_file(path: &Path) {
 
         let process = match unsafe {
             OpenProcess(
-                PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE,
+                PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE | PROCESS_SYNCHRONIZE,
                 false,
                 pid,
             )
@@ -165,7 +166,7 @@ fn kill_and_write_pid_file(path: &Path) {
 
         let infoband = w!("infoband.exe");
         if !name.ends_with(unsafe { infoband.as_wide() }) {
-            log::debug!(
+            return log::debug!(
                 "Not killing process {} (`{}`)",
                 pid,
                 String::from_utf16_lossy(name)
@@ -173,8 +174,25 @@ fn kill_and_write_pid_file(path: &Path) {
         }
 
         match unsafe { TerminateProcess(process, 0) } {
-            Ok(()) => log::info!("Killed existing instance with pid {}", pid),
-            Err(e) => log::warn!("Failed to terminate process {}: {}", pid, e),
+            Ok(()) => log::info!("Started termination of existing instance with pid {}", pid),
+            Err(e) => return log::warn!("Failed to terminate process {}: {}", pid, e),
+        }
+
+        match unsafe { WaitForSingleObject(process, EXISTING_PROCESS_SHUTDOWN_MS) } {
+            WAIT_OBJECT_0 => log::info!(
+                "Completed termination of existing instance with pid {}",
+                pid
+            ),
+            WAIT_TIMEOUT => log::warn!(
+                "Existing instance with pid {} did not exit after {}ms",
+                pid,
+                EXISTING_PROCESS_SHUTDOWN_MS
+            ),
+            _ => log::warn!(
+                "Failed to wait for existing instance with pid {} to exit: {}",
+                pid,
+                Error::from_win32()
+            ),
         }
     }
 

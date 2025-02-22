@@ -4,6 +4,9 @@ use windows::Win32::Foundation::{COLORREF, WPARAM};
 use windows::Win32::UI::Input::KeyboardAndMouse::VK_C;
 use windows::Win32::UI::WindowsAndMessaging::{self, TIMERV_DEFAULT_COALESCING};
 
+// Startup parameters
+pub const EXISTING_PROCESS_SHUTDOWN_MS: u32 = 1000;
+
 // Sizing and positioning
 //
 // Replicating the exact positioning that Windows uses is difficult.
