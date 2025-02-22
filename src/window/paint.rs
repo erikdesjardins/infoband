@@ -52,7 +52,7 @@ impl Drop for Paint {
         _ = self.called_buffered_paint_init;
         // SAFETY: init and uninit must be called in pairs; we call init when constructing this type
         if let Err(e) = unsafe { BufferedPaintUnInit() } {
-            log::error!("BufferedPaintUnInit failed: {}", e);
+            log::error!("BufferedPaintUnInit failed: {e}");
         }
 
         if !unsafe { DeleteObject(self.debug_background_brush.into()) }.as_bool() {
@@ -131,10 +131,7 @@ impl Paint {
                 self.rect.set(rect);
             }
             Err(e) => {
-                log::warn!(
-                    "Update window position failed, preserving old position: {}",
-                    e
-                );
+                log::warn!("Update window position failed, preserving old position: {e}");
             }
         }
     }
@@ -182,7 +179,7 @@ impl Paint {
     /// Paint the window using the window's device context.
     pub fn render(&self, window: HWND, metrics: &Metrics, is_muted: bool) {
         if let Err(e) = self.render_fallible(window, metrics, is_muted) {
-            log::error!("Paint failed: {}", e);
+            log::error!("Paint failed: {e}");
         }
     }
 
@@ -243,7 +240,7 @@ impl Paint {
         defer! {
             // ...and don't update (false) the underlying window...
             if let Err(e) = unsafe { EndBufferedPaint(buffered_paint, false) } {
-                log::error!("EndBufferedPaint failed: {}", e);
+                log::error!("EndBufferedPaint failed: {e}");
             }
         }
 
@@ -292,7 +289,7 @@ impl Paint {
         }
         defer! {
             if let Err(e) = unsafe { CloseThemeData(text_style) } {
-                log::error!("CloseThemeData failed: {}", e);
+                log::error!("CloseThemeData failed: {e}");
             }
         }
 
@@ -363,19 +360,19 @@ impl Paint {
         text(" DSK", &left_mid_at(left_column, second_line_midpoint))?;
 
         text(
-            &format!("{:.0}%", cpu),
+            &format!("{cpu:.0}%"),
             &right_mid_at(right_column, first_line_midpoint),
         )?;
         text(
-            &format!("{:.0}%", mem),
+            &format!("{mem:.0}%"),
             &right_mid_at(right_column, second_line_midpoint),
         )?;
         text(
-            &format!("{:.0} Mb/s", net),
+            &format!("{net:.0} Mb/s"),
             &right_mid_at(left_column, first_line_midpoint),
         )?;
         text(
-            &format!("{:.0} MB/s", dsk),
+            &format!("{dsk:.0} MB/s"),
             &right_mid_at(left_column, second_line_midpoint),
         )?;
 

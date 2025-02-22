@@ -25,7 +25,7 @@ impl Drop for ListenerManager {
     fn drop(&mut self) {
         for (id, endpoint) in &self.registered_endpoints {
             if let Err(e) = unsafe { endpoint.UnregisterControlChangeNotify(&self.listener) } {
-                log::error!("Unregistering listener failed for {}: {}", id, e);
+                log::error!("Unregistering listener failed for mic {id}: {e}");
             }
         }
     }
@@ -87,7 +87,7 @@ impl ListenerManager {
             // ...and register the listener.
             unsafe { endpoint.RegisterControlChangeNotify(Some(&self.listener))? };
 
-            log::debug!("Registered listener for mic {}", id);
+            log::debug!("Registered listener for mic {id}");
 
             // Invariant: we just successfully registered the listener above.
             self.registered_endpoints.push((id, endpoint));

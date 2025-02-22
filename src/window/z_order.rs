@@ -40,7 +40,7 @@ impl ZOrder {
     /// so this fn must be called once before the first call to `update`.
     pub fn touch_window(&self, window: HWND) {
         if let Err(e) = self.touch_window_fallible(window) {
-            log::error!("Touching window failed: {}", e);
+            log::error!("Touching window failed: {e}");
         }
     }
 
@@ -66,7 +66,7 @@ impl ZOrder {
     /// and our logic is much simpler, so we always end up winning the race and using its old z-order.
     pub fn queue_update(&self, window: HWND) {
         if let Err(e) = self.queue_update_fallible(window) {
-            log::error!("Queuing z-order update failed: {}", e);
+            log::error!("Queuing z-order update failed: {e}");
         }
     }
 
@@ -90,7 +90,7 @@ impl ZOrder {
 
     pub fn kill_timer(&self, window: HWND) {
         if let Err(e) = self.kill_timer_fallible(window) {
-            log::error!("Killing z-order update timer failed: {}", e);
+            log::error!("Killing z-order update timer failed: {e}");
         }
     }
 
@@ -101,7 +101,7 @@ impl ZOrder {
     /// Set our window's z-order to match the taskbar's.
     pub fn update(&self, window: HWND) {
         if let Err(e) = self.update_fallible(window) {
-            log::error!("Z-order update failed: {}", e);
+            log::error!("Z-order update failed: {e}");
         }
     }
 
@@ -126,7 +126,7 @@ impl ZOrder {
     }
 
     fn set_z_order_to(&self, window: HWND, topmost: bool) -> Result<()> {
-        log::debug!("Setting z-order to topmost={}", topmost);
+        log::debug!("Setting z-order to topmost={topmost}");
 
         unsafe {
             SetWindowPos(

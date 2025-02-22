@@ -104,8 +104,7 @@ impl ProcHandler for InfoBand {
                 let dpi_raw = u32::from(wparam.0 as u16);
                 let dpi = self.paint.set_dpi(dpi_raw);
                 log::info!(
-                    "DPI changed to {} or {}% (WM_DPICHANGED)",
-                    dpi_raw,
+                    "DPI changed to {dpi_raw} or {}% (WM_DPICHANGED)",
                     100.scale_by(dpi)
                 );
                 self.paint.update_size_and_position();
@@ -135,8 +134,7 @@ impl ProcHandler for InfoBand {
                 UM_SET_OFFSET_FROM_RIGHT => {
                     let offset_from_right = Unscaled::new(lparam.0 as _);
                     log::info!(
-                        "Setting offset from right to {} (UM_SET_OFFSET_FROM_RIGHT)",
-                        offset_from_right
+                        "Setting offset from right to {offset_from_right} (UM_SET_OFFSET_FROM_RIGHT)"
                     );
                     self.paint.set_offset_from_right(offset_from_right);
                     LRESULT(0)
@@ -241,7 +239,7 @@ impl ProcHandler for InfoBand {
             WM_HOTKEY => match wparam {
                 HOTKEY_MIC_MUTE => {
                     let mute = !self.mic.is_muted();
-                    log::debug!("Toggling mic mute (WM_HOTKEY mute={})", mute);
+                    log::debug!("Toggling mic mute (WM_HOTKEY mute={mute})");
                     self.mic.refresh_devices();
                     self.mic.set_mute(mute);
                     LRESULT(0)
@@ -273,9 +271,7 @@ impl ProcHandler for InfoBand {
                     self.mic.update_muted_state();
                     let now_muted = self.mic.is_muted();
                     log::debug!(
-                        "Checking mic state (IDT_MIC_STATE_TIMER was_muted={} now_muted={})",
-                        was_muted,
-                        now_muted
+                        "Checking mic state (IDT_MIC_STATE_TIMER was_muted={was_muted} now_muted={now_muted})"
                     );
                     if was_muted != now_muted {
                         self.paint.render(window, &self.metrics, now_muted);
