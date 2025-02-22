@@ -67,12 +67,14 @@ impl ListenerManager {
                 unsafe { CoTaskMemFree(Some(id.as_ptr().cast())) };
             }
             assert!(!id.is_null());
-            let id = unsafe { id.to_hstring() };
+            let id_bytes = unsafe { id.as_wide() };
 
             // Ignore devices we've already registered.
-            if self.registered_endpoints.iter().any(|(i, _)| i == &id) {
+            if self.registered_endpoints.iter().any(|(i, _)| &**i == id_bytes) {
                 continue;
             }
+
+            let id = unsafe { id.to_hstring() };
 
             // If not already registered, get the endpoint...
             let endpoint =
