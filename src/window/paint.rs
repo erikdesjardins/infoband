@@ -35,8 +35,6 @@ pub struct Paint {
     debug: Cell<bool>,
     /// Offset from the right edge of the monitor, in unscaled pixels.
     offset_from_right: Cell<Unscaled<i32>>,
-    /// Whether to always skip paint attempts.
-    skip_paint: Cell<bool>,
     /// DPI scaling factor of the window.
     dpi: Cell<ScalingFactor>,
     /// Size and position of the window.
@@ -94,7 +92,6 @@ impl Paint {
         Ok(Self {
             debug: Cell::new(false),
             offset_from_right: Cell::new(offset_from_right),
-            skip_paint: Cell::new(false),
             dpi: Cell::new(dpi),
             rect: Cell::new(rect),
             debug_background_brush,
@@ -113,10 +110,6 @@ impl Paint {
 
     pub fn set_offset_from_right(&self, offset_from_right: Unscaled<i32>) {
         self.offset_from_right.set(offset_from_right);
-    }
-
-    pub fn set_skip_paint(&self, skip: bool) {
-        self.skip_paint.set(skip);
     }
 
     pub fn set_dpi(&self, dpi: u32) -> ScalingFactor {
@@ -186,10 +179,6 @@ impl Paint {
     /// Toplevel paint method, responsible for dealing with paint buffering and updating the window,
     /// but not with drawing any content.
     fn render_fallible(&self, window: HWND, metrics: &Metrics, is_muted: bool) -> Result<()> {
-        if self.skip_paint.get() {
-            return Ok(());
-        }
-
         let rect = self.rect.get();
         let size = rect.size();
         let position = rect.top_left_corner();

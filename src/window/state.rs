@@ -222,23 +222,23 @@ impl ProcHandler for InfoBand {
             },
             WM_WTSSESSION_CHANGE => match wparam {
                 WTS_SESSION_LOGON => {
-                    log::debug!("Resuming paint due to logon (WTS_SESSION_LOGON)");
-                    self.paint.set_skip_paint(false);
+                    log::info!("Resuming updates due to logon (WTS_SESSION_LOGON)");
+                    self.timers.fetch_and_redraw.reschedule(window);
                     LRESULT(0)
                 }
                 WTS_SESSION_LOGOFF => {
-                    log::debug!("Skipping paint due to logoff (WTS_SESSION_LOGOFF)");
-                    self.paint.set_skip_paint(true);
+                    log::info!("Pausing updates due to logoff (WTS_SESSION_LOGOFF)");
+                    self.timers.fetch_and_redraw.kill(window);
                     LRESULT(0)
                 }
                 WTS_SESSION_LOCK => {
-                    log::debug!("Skipping paint due to lock (WTS_SESSION_LOCK)");
-                    self.paint.set_skip_paint(true);
+                    log::info!("Pausing updates due to lock (WTS_SESSION_LOCK)");
+                    self.timers.fetch_and_redraw.kill(window);
                     LRESULT(0)
                 }
                 WTS_SESSION_UNLOCK => {
-                    log::debug!("Resuming paint due to unlock (WTS_SESSION_UNLOCK)");
-                    self.paint.set_skip_paint(false);
+                    log::info!("Resuming updates due to unlock (WTS_SESSION_UNLOCK)");
+                    self.timers.fetch_and_redraw.reschedule(window);
                     LRESULT(0)
                 }
                 _ => {
