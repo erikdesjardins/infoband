@@ -99,7 +99,7 @@ impl ScalingFactor {
         let factor = (u64::from(Self::ONE.0) * u64::from(num)) / u64::from(denom);
         match factor.try_into() {
             Ok(f) => Self(f),
-            Err(e) => panic!("Scaling factor {} / {} is too large: {}", num, denom, e),
+            Err(e) => panic!("Scaling factor {num} / {denom} is too large: {e}"),
         }
     }
 }

@@ -35,8 +35,6 @@ pub struct Paint {
     debug: Cell<bool>,
     /// Offset from the right edge of the monitor, in unscaled pixels.
     offset_from_right: Cell<Unscaled<i32>>,
-    /// Whether to always skip paint attempts.
-    skip_paint: Cell<bool>,
     /// DPI scaling factor of the window.
     dpi: Cell<ScalingFactor>,
     /// Size and position of the window.
@@ -52,7 +50,7 @@ impl Drop for Paint {
         _ = self.called_buffered_paint_init;
         // SAFETY: init and uninit must be called in pairs; we call init when constructing this type
         if let Err(e) = unsafe { BufferedPaintUnInit() } {
-            log::error!("BufferedPaintUnInit failed: {}", e);
+            log::error!("BufferedPaintUnInit failed: {e}");
         }
 
         if !unsafe { DeleteObject(self.debug_background_brush.into()) }.as_bool() {
@@ -94,7 +92,6 @@ impl Paint {
         Ok(Self {
             debug: Cell::new(false),
             offset_from_right: Cell::new(offset_from_right),
-            skip_paint: Cell::new(false),
             dpi: Cell::new(dpi),
             rect: Cell::new(rect),
             debug_background_brush,
@@ -115,10 +112,6 @@ impl Paint {
         self.offset_from_right.set(offset_from_right);
     }
 
-    pub fn set_skip_paint(&self, skip: bool) {
-        self.skip_paint.set(skip);
-    }
-
     pub fn set_dpi(&self, dpi: u32) -> ScalingFactor {
         let dpi = ScalingFactor::from_ratio(dpi, USER_DEFAULT_SCREEN_DPI);
         self.dpi.set(dpi);
@@ -131,10 +124,7 @@ impl Paint {
                 self.rect.set(rect);
             }
             Err(e) => {
-                log::warn!(
-                    "Update window position failed, preserving old position: {}",
-                    e
-                );
+                log::warn!("Update window position failed, preserving old position: {e}");
             }
         }
     }
@@ -182,17 +172,13 @@ impl Paint {
     /// Paint the window using the window's device context.
     pub fn render(&self, window: HWND, metrics: &Metrics, is_muted: bool) {
         if let Err(e) = self.render_fallible(window, metrics, is_muted) {
-            log::error!("Paint failed: {}", e);
+            log::error!("Paint failed: {e}");
         }
     }
 
     /// Toplevel paint method, responsible for dealing with paint buffering and updating the window,
     /// but not with drawing any content.
     fn render_fallible(&self, window: HWND, metrics: &Metrics, is_muted: bool) -> Result<()> {
-        if self.skip_paint.get() {
-            return Ok(());
-        }
-
         let rect = self.rect.get();
         let size = rect.size();
         let position = rect.top_left_corner();
@@ -243,7 +229,7 @@ impl Paint {
         defer! {
             // ...and don't update (false) the underlying window...
             if let Err(e) = unsafe { EndBufferedPaint(buffered_paint, false) } {
-                log::error!("EndBufferedPaint failed: {}", e);
+                log::error!("EndBufferedPaint failed: {e}");
             }
         }
 
@@ -292,7 +278,7 @@ impl Paint {
         }
         defer! {
             if let Err(e) = unsafe { CloseThemeData(text_style) } {
-                log::error!("CloseThemeData failed: {}", e);
+                log::error!("CloseThemeData failed: {e}");
             }
         }
 
@@ -363,19 +349,19 @@ impl Paint {
         text(" DSK", &left_mid_at(left_column, second_line_midpoint))?;
 
         text(
-            &format!("{:.0}%", cpu),
+            &format!("{cpu:.0}%"),
             &right_mid_at(right_column, first_line_midpoint),
         )?;
         text(
-            &format!("{:.0}%", mem),
+            &format!("{mem:.0}%"),
             &right_mid_at(right_column, second_line_midpoint),
         )?;
         text(
-            &format!("{:.0} Mb/s", net),
+            &format!("{net:.0} Mb/s"),
             &right_mid_at(left_column, first_line_midpoint),
         )?;
         text(
-            &format!("{:.0} MB/s", dsk),
+            &format!("{dsk:.0} MB/s"),
             &right_mid_at(left_column, second_line_midpoint),
         )?;
 

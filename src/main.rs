@@ -12,6 +12,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use crate::constants::{CONFIG_FILE_NAME, LOG_FILE_NAME, PID_FILE_NAME};
+use constants::EXISTING_PROCESS_SHUTDOWN_MS;
 use log::LevelFilter;
 use log4rs::Config;
 use log4rs::append::console::{ConsoleAppender, Target};
@@ -22,11 +23,11 @@ use std::env;
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
-use windows::Win32::Foundation::CloseHandle;
+use windows::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0, WAIT_TIMEOUT};
 use windows::Win32::System::ProcessStatus::GetModuleFileNameExW;
 use windows::Win32::System::Threading::{
-    GetCurrentProcessId, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_TERMINATE,
-    TerminateProcess,
+    GetCurrentProcessId, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE,
+    PROCESS_TERMINATE, TerminateProcess, WaitForSingleObject,
 };
 use windows::core::{Error, Result, w};
 
@@ -68,7 +69,7 @@ fn main() -> Result<()> {
 
     if let Err(e) = window::create_and_run_message_loop(offset_from_right, mic_hotkey, debug_paint)
     {
-        log::error!("Failed to create and run message loop: {}", e);
+        log::error!("Failed to create and run message loop: {e}");
         return Err(e);
     }
 
@@ -85,9 +86,8 @@ fn make_local_appdata_folder() -> PathBuf {
 
     if let Err(e) = fs::create_dir_all(&path) {
         panic!(
-            "Failed to create local appdata folder `{}`: {}",
-            path.display(),
-            e
+            "Failed to create local appdata folder `{}`: {e}",
+            path.display()
         );
     }
 
@@ -125,28 +125,28 @@ fn kill_and_write_pid_file(path: &Path) {
         let pid = match fs::read_to_string(path) {
             Ok(pid) => pid,
             Err(e) if e.kind() == io::ErrorKind::NotFound => return,
-            Err(e) => return log::warn!("Failed to read pid file `{}`: {}", path.display(), e),
+            Err(e) => return log::warn!("Failed to read pid file `{}`: {e}", path.display()),
         };
 
         let pid = match pid.parse::<u32>() {
             Ok(pid) => pid,
-            Err(e) => return log::warn!("Failed to parse pid file `{}`: {}", path.display(), e),
+            Err(e) => return log::warn!("Failed to parse pid file `{}`: {e}", path.display()),
         };
 
         let process = match unsafe {
             OpenProcess(
-                PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE,
+                PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE | PROCESS_SYNCHRONIZE,
                 false,
                 pid,
             )
         } {
             Ok(process) => process,
             // This happens normally when the process has already exited.
-            Err(e) => return log::debug!("Failed to open process {}: {}", pid, e),
+            Err(e) => return log::debug!("Failed to open process {pid}: {e}"),
         };
         defer! {
             if let Err(e) = unsafe { CloseHandle(process) } {
-                log::warn!("Failed to close process {}: {}", pid, e);
+                log::warn!("Failed to close process {pid}: {e}");
             }
         }
 
@@ -154,8 +154,7 @@ fn kill_and_write_pid_file(path: &Path) {
         let len = match unsafe { GetModuleFileNameExW(Some(process), None, &mut name) } {
             0 => {
                 return log::warn!(
-                    "Failed to get process name for pid {}: {}",
-                    pid,
+                    "Failed to get process name for pid {pid}: {}",
                     Error::from_win32()
                 );
             }
@@ -165,16 +164,28 @@ fn kill_and_write_pid_file(path: &Path) {
 
         let infoband = w!("infoband.exe");
         if !name.ends_with(unsafe { infoband.as_wide() }) {
-            log::debug!(
-                "Not killing process {} (`{}`)",
-                pid,
+            return log::debug!(
+                "Not killing process {pid} (`{}`)",
                 String::from_utf16_lossy(name)
             );
         }
 
         match unsafe { TerminateProcess(process, 0) } {
-            Ok(()) => log::info!("Killed existing instance with pid {}", pid),
-            Err(e) => log::warn!("Failed to terminate process {}: {}", pid, e),
+            Ok(()) => log::info!("Started termination of existing instance with pid {pid}"),
+            Err(e) => return log::warn!("Failed to terminate process {pid}: {e}"),
+        }
+
+        match unsafe { WaitForSingleObject(process, EXISTING_PROCESS_SHUTDOWN_MS) } {
+            WAIT_OBJECT_0 => {
+                log::info!("Completed termination of existing instance with pid {pid}")
+            }
+            WAIT_TIMEOUT => log::warn!(
+                "Existing instance with pid {pid} did not exit after {EXISTING_PROCESS_SHUTDOWN_MS}ms"
+            ),
+            _ => log::warn!(
+                "Failed to wait for existing instance with pid {pid} to exit: {}",
+                Error::from_win32()
+            ),
         }
     }
 
@@ -184,8 +195,8 @@ fn kill_and_write_pid_file(path: &Path) {
     let current_pid = unsafe { GetCurrentProcessId() };
 
     match fs::write(path, current_pid.to_string()) {
-        Ok(()) => log::debug!("Wrote pid {} to file `{}`", current_pid, path.display()),
-        Err(e) => log::warn!("Failed to write pid file `{}`: {}", path.display(), e),
+        Ok(()) => log::debug!("Wrote pid {current_pid} to file `{}`", path.display()),
+        Err(e) => log::warn!("Failed to write pid file `{}`: {e}", path.display()),
     }
 }
 
@@ -199,28 +210,27 @@ fn load_config_file(path: &Path) -> opt::ConfigFile {
                 config
             }
             Err(e) => {
-                log::error!("Failed to parse config file `{}`: {}", path.display(), e);
+                log::error!("Failed to parse config file `{}`: {e}", path.display());
                 default_config
             }
         },
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
             log::info!("Config file `{}` not found, creating", path.display());
             match File::create(path) {
-                Ok(file) => match serde_json::to_writer_pretty(file, &default_config) {
-                    Ok(()) => {}
-                    Err(e) => {
-                        log::warn!("Failed to write config file `{}`: {}", path.display(), e);
+                Ok(file) => {
+                    if let Err(e) = serde_json::to_writer_pretty(file, &default_config) {
+                        log::warn!("Failed to write config file `{}`: {e}", path.display());
                         if let Err(e) = fs::remove_file(path) {
-                            log::warn!("...and failed to delete the empty file: {}", e);
+                            log::warn!("...and failed to delete the empty file: {e}");
                         }
                     }
-                },
-                Err(e) => log::warn!("Failed to create config file `{}`: {}", path.display(), e),
+                }
+                Err(e) => log::warn!("Failed to create config file `{}`: {e}", path.display()),
             }
             default_config
         }
         Err(e) => {
-            log::error!("Failed to load config file: {}", e);
+            log::error!("Failed to load config file: {e}");
             default_config
         }
     }

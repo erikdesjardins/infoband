@@ -42,7 +42,7 @@ pub unsafe extern "system" fn window_proc<H: ProcHandler>(
             let state = match create_state::<H>(window) {
                 Ok(state) => state,
                 Err(e) => {
-                    log::error!("Failed to create window state: {}", e);
+                    log::error!("Failed to create window state: {e}");
                     // Returning false terminates window creation
                     return LRESULT(0);
                 }

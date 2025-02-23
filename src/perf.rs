@@ -53,7 +53,7 @@ where
     fn drop(&mut self) {
         // SAFETY: handle is valid and hasn't been closed due to our safety invariant.
         if let Err(e) = unsafe { WIN32_ERROR(PerfCloseQueryHandle(self.handle)).ok() } {
-            log::error!("Failed to close PerfQueryHandle: {}", e);
+            log::error!("Failed to close PerfQueryHandle: {e}");
         }
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "infoband"
-version = "1.5.2"
+version = "1.5.3"
 authors = ["Erik Desjardins <erikdesjardins@users.noreply.github.com>"]
 description = "Windows \"DeskBand\" displaying cpu/mem/disk/network info."
 repository = "https://github.com/erikdesjardins/infoband"

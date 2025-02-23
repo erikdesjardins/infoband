@@ -1,10 +1,8 @@
-use crate::constants::{IDT_Z_ORDER_TIMER, Z_ORDER_TIMER_COALESCE, Z_ORDER_TIMER_MS};
 use std::cell::Cell;
 use windows::Win32::Foundation::{ERROR_INVALID_WINDOW_HANDLE, HWND};
 use windows::Win32::UI::WindowsAndMessaging::{
-    FindWindowW, GWL_EXSTYLE, GetWindowLongW, HWND_BOTTOM, HWND_TOPMOST, KillTimer, SWP_NOMOVE,
-    SWP_NOSENDCHANGING, SWP_NOSIZE, SWP_NOZORDER, SetCoalescableTimer, SetWindowPos,
-    WINDOW_EX_STYLE, WS_EX_TOPMOST,
+    FindWindowW, GWL_EXSTYLE, GetWindowLongW, HWND_BOTTOM, HWND_TOPMOST, SWP_NOMOVE,
+    SWP_NOSENDCHANGING, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, WINDOW_EX_STYLE, WS_EX_TOPMOST,
 };
 use windows::core::{Error, HRESULT, Result, w};
 
@@ -40,7 +38,7 @@ impl ZOrder {
     /// so this fn must be called once before the first call to `update`.
     pub fn touch_window(&self, window: HWND) {
         if let Err(e) = self.touch_window_fallible(window) {
-            log::error!("Touching window failed: {}", e);
+            log::error!("Touching window failed: {e}");
         }
     }
 
@@ -60,48 +58,10 @@ impl ZOrder {
         Ok(())
     }
 
-    /// Should be called when a window state changes, so we can update our state to match the taskbar's.
-    ///
-    /// This is necessary because we receive shell hook events concurrently with the taskbar process,
-    /// and our logic is much simpler, so we always end up winning the race and using its old z-order.
-    pub fn queue_update(&self, window: HWND) {
-        if let Err(e) = self.queue_update_fallible(window) {
-            log::error!("Queuing z-order update failed: {}", e);
-        }
-    }
-
-    fn queue_update_fallible(&self, window: HWND) -> Result<()> {
-        // If there is an existing timer running, this will overwrite it, producing a debounce effect.
-        if unsafe {
-            SetCoalescableTimer(
-                Some(window),
-                IDT_Z_ORDER_TIMER.0,
-                Z_ORDER_TIMER_MS,
-                None,
-                Z_ORDER_TIMER_COALESCE,
-            )
-        } == 0
-        {
-            return Err(Error::from_win32());
-        }
-
-        Ok(())
-    }
-
-    pub fn kill_timer(&self, window: HWND) {
-        if let Err(e) = self.kill_timer_fallible(window) {
-            log::error!("Killing z-order update timer failed: {}", e);
-        }
-    }
-
-    fn kill_timer_fallible(&self, window: HWND) -> Result<()> {
-        unsafe { KillTimer(Some(window), IDT_Z_ORDER_TIMER.0) }
-    }
-
     /// Set our window's z-order to match the taskbar's.
     pub fn update(&self, window: HWND) {
         if let Err(e) = self.update_fallible(window) {
-            log::error!("Z-order update failed: {}", e);
+            log::error!("Z-order update failed: {e}");
         }
     }
 
@@ -126,7 +86,7 @@ impl ZOrder {
     }
 
     fn set_z_order_to(&self, window: HWND, topmost: bool) -> Result<()> {
-        log::debug!("Setting z-order to topmost={}", topmost);
+        log::debug!("Setting z-order to topmost={topmost}");
 
         unsafe {
             SetWindowPos(
