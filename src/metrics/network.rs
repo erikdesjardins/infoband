@@ -20,12 +20,14 @@ impl State {
             dw_num_entries: u32,
             table: [MIB_IFROW; 128],
         }
-        assert!(mem::align_of::<BIG_MIB_IFTABLE>() == mem::align_of::<MIB_IFTABLE>());
-        assert!(
-            mem::offset_of!(BIG_MIB_IFTABLE, dw_num_entries)
-                == mem::offset_of!(MIB_IFTABLE, dwNumEntries)
-        );
-        assert!(mem::offset_of!(BIG_MIB_IFTABLE, table) == mem::offset_of!(MIB_IFTABLE, table));
+        const {
+            assert!(mem::align_of::<BIG_MIB_IFTABLE>() == mem::align_of::<MIB_IFTABLE>());
+            assert!(
+                mem::offset_of!(BIG_MIB_IFTABLE, dw_num_entries)
+                    == mem::offset_of!(MIB_IFTABLE, dwNumEntries)
+            );
+            assert!(mem::offset_of!(BIG_MIB_IFTABLE, table) == mem::offset_of!(MIB_IFTABLE, table));
+        }
 
         // SAFETY: MIB_IFTABLE can be safely zero-initialized
         let mut interfaces: BIG_MIB_IFTABLE = unsafe { mem::zeroed() };
