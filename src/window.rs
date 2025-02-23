@@ -1,7 +1,6 @@
 use crate::constants::{
-    FETCH_AND_REDRAW_TIMER_COALESCE, FETCH_TIMER_MS, HOTKEY_MIC_MUTE, IDT_FETCH_AND_REDRAW_TIMER,
-    UM_ENABLE_DEBUG_PAINT, UM_INITIAL_METRICS, UM_INITIAL_MIC_STATE, UM_INITIAL_PAINT,
-    UM_INITIAL_Z_ORDER, UM_SET_OFFSET_FROM_RIGHT,
+    HOTKEY_MIC_MUTE, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_METRICS, UM_INITIAL_MIC_STATE,
+    UM_INITIAL_PAINT, UM_INITIAL_Z_ORDER, UM_SET_OFFSET_FROM_RIGHT,
 };
 use crate::defer;
 use crate::opt::MicrophoneHotkey;
@@ -21,8 +20,8 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 use windows::Win32::UI::WindowsAndMessaging::{
     CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, CreateWindowExW, DispatchMessageW, GetMessageW,
     IDC_ARROW, LoadCursorW, MSG, PostMessageW, RegisterClassW, RegisterShellHookWindow, SW_SHOWNA,
-    SetCoalescableTimer, ShowWindow, WM_USER, WNDCLASSW, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
-    WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT, WS_POPUP,
+    ShowWindow, WM_USER, WNDCLASSW, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_EX_LAYERED,
+    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT, WS_POPUP,
 };
 use windows::core::{Error, HRESULT, Result, w};
 
@@ -31,6 +30,7 @@ mod microphone;
 mod paint;
 mod proc;
 mod state;
+mod timers;
 mod z_order;
 
 /// Create the toplevel window, start timers for updating it, and pump the windows message loop.
@@ -166,21 +166,6 @@ pub fn create_and_run_message_loop(
 
     // Enqueue a message for initial paint
     unsafe { PostMessageW(Some(window), WM_USER, UM_INITIAL_PAINT, LPARAM(0))? };
-
-    // Set up timer to fetch metrics and redraw.
-    // Note: this timer will be destroyed when the window is destroyed. (And in fact we can't destroy it manually, since the window handle will be invalid.)
-    if unsafe {
-        SetCoalescableTimer(
-            Some(window),
-            IDT_FETCH_AND_REDRAW_TIMER.0,
-            FETCH_TIMER_MS,
-            None,
-            FETCH_AND_REDRAW_TIMER_COALESCE,
-        )
-    } == 0
-    {
-        return Err(Error::from_win32());
-    }
 
     // Show window (without activating/focusing it) after setting it up.
     // Note that layered windows still don't render until you call UpdateLayeredWindow.

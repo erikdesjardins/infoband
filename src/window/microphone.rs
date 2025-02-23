@@ -1,9 +1,7 @@
-use crate::constants::IDT_MIC_STATE_TIMER;
 use listener::ListenerManager;
 use std::cell::{Cell, RefCell};
 use std::ptr;
 use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::WindowsAndMessaging::KillTimer;
 use windows::core::Result;
 
 mod listener;
@@ -24,16 +22,6 @@ impl Microphone {
 
     pub fn is_muted(&self) -> bool {
         self.is_muted.get()
-    }
-
-    pub fn kill_timer(&self, window: HWND) {
-        if let Err(e) = self.kill_timer_fallible(window) {
-            log::error!("Killing mic update timer failed: {e}");
-        }
-    }
-
-    fn kill_timer_fallible(&self, window: HWND) -> Result<()> {
-        unsafe { KillTimer(Some(window), IDT_MIC_STATE_TIMER.0) }
     }
 
     pub fn refresh_devices(&self) {

@@ -1,6 +1,6 @@
-use crate::constants::{IDT_MIC_STATE_TIMER, MIC_STATE_TIMER_COALESCE, MIC_STATE_TIMER_MS};
+use crate::constants::UM_QUEUE_MIC_STATE_CHECK;
 use crate::defer;
-use windows::Win32::Foundation::HWND;
+use windows::Win32::Foundation::{HWND, LPARAM};
 use windows::Win32::Media::Audio::Endpoints::{
     IAudioEndpointVolume, IAudioEndpointVolumeCallback, IAudioEndpointVolumeCallback_Impl,
 };
@@ -8,9 +8,9 @@ use windows::Win32::Media::Audio::{
     DEVICE_STATE_ACTIVE, IMMDeviceEnumerator, MMDeviceEnumerator, eCapture,
 };
 use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance, CoTaskMemFree};
-use windows::Win32::UI::WindowsAndMessaging::SetCoalescableTimer;
+use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_USER};
 use windows::core::Result;
-use windows_core::{Error, HSTRING, implement};
+use windows_core::{HSTRING, implement};
 
 pub struct ListenerManager {
     dev_enumerator: IMMDeviceEnumerator,
@@ -109,20 +109,14 @@ impl IAudioEndpointVolumeCallback_Impl for MicrophoneListener_Impl {
     ) -> Result<()> {
         // WARNING: this may be called from another thread, so we can only do thread-safe operations here.
 
-        // If there is an existing timer running, this will overwrite it, producing a debounce effect.
-        if unsafe {
-            SetCoalescableTimer(
+        // Send a message to the main thread to enqueue a mic state check.
+        unsafe {
+            PostMessageW(
                 Some(self.window),
-                IDT_MIC_STATE_TIMER.0,
-                MIC_STATE_TIMER_MS,
-                None,
-                MIC_STATE_TIMER_COALESCE,
+                WM_USER,
+                UM_QUEUE_MIC_STATE_CHECK,
+                LPARAM(0),
             )
-        } == 0
-        {
-            return Err(Error::from_win32());
         }
-
-        Ok(())
     }
 }

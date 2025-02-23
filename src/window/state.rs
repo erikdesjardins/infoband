@@ -2,8 +2,8 @@ use crate::constants::{
     HOTKEY_MIC_MUTE, HSHELL_RUDEAPPACTIVATED, HSHELL_WINDOWACTIVATED, IDT_FETCH_AND_REDRAW_TIMER,
     IDT_MIC_STATE_TIMER, IDT_Z_ORDER_TIMER, REDRAW_EVERY_N_FETCHES, UM_ENABLE_DEBUG_PAINT,
     UM_INITIAL_METRICS, UM_INITIAL_MIC_STATE, UM_INITIAL_PAINT, UM_INITIAL_Z_ORDER,
-    UM_SET_OFFSET_FROM_RIGHT, WTS_SESSION_LOCK, WTS_SESSION_LOGOFF, WTS_SESSION_LOGON,
-    WTS_SESSION_UNLOCK,
+    UM_QUEUE_MIC_STATE_CHECK, UM_SET_OFFSET_FROM_RIGHT, WTS_SESSION_LOCK, WTS_SESSION_LOGOFF,
+    WTS_SESSION_LOGON, WTS_SESSION_UNLOCK,
 };
 use crate::metrics::Metrics;
 use crate::utils::{ScaleBy, Unscaled};
@@ -11,6 +11,7 @@ use crate::window::messages;
 use crate::window::microphone::Microphone;
 use crate::window::paint::Paint;
 use crate::window::proc::ProcHandler;
+use crate::window::timers::Timers;
 use crate::window::z_order::ZOrder;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -23,6 +24,8 @@ use windows::core::{Error, Result, w};
 pub struct InfoBand {
     /// The message ID of the SHELLHOOK message.
     shellhook_message: u32,
+    /// Timer state.
+    timers: Timers,
     /// Paint state.
     paint: Paint,
     /// Z=order state.
@@ -45,6 +48,7 @@ impl ProcHandler for InfoBand {
 
         Ok(Self {
             shellhook_message,
+            timers: Timers::new(),
             paint: Paint::new(window)?,
             z_order: ZOrder::new()?,
             mic: Microphone::new(window)?,
@@ -148,6 +152,8 @@ impl ProcHandler for InfoBand {
                 UM_INITIAL_METRICS => {
                     log::info!("Initial metrics fetch (UM_INITIAL_METRICS)");
                     self.metrics.fetch();
+                    // Start timer for fetching metrics and redrawing.
+                    self.timers.fetch_and_redraw.reschedule(window);
                     LRESULT(0)
                 }
                 UM_INITIAL_Z_ORDER => {
@@ -161,6 +167,12 @@ impl ProcHandler for InfoBand {
                     self.paint.update_size_and_position();
                     self.paint
                         .render(window, &self.metrics, self.mic.is_muted());
+                    LRESULT(0)
+                }
+                UM_QUEUE_MIC_STATE_CHECK => {
+                    log::debug!("Queuing mic state check (UM_QUEUE_MIC_STATE_CHECK)");
+                    // If multiple notifications are received in quick succession, rescheduling the timer effectively debounces them.
+                    self.timers.mic_state.reschedule(window);
                     LRESULT(0)
                 }
                 _ => {
@@ -194,7 +206,9 @@ impl ProcHandler for InfoBand {
                         wparam.0,
                         lparam.0
                     );
-                    self.z_order.queue_update(window);
+                    // This timer is necessary because we receive shell hook events concurrently with the taskbar process,
+                    // and our logic is much simpler, so we always end up winning the race and using its old z-order.
+                    self.timers.z_order.reschedule(window);
                     LRESULT(0)
                 }
                 _ => {
@@ -276,12 +290,13 @@ impl ProcHandler for InfoBand {
                     LRESULT(0)
                 }
                 IDT_MIC_STATE_TIMER => {
-                    self.mic.kill_timer(window);
+                    self.timers.mic_state.kill(window);
+
                     let was_muted = self.mic.is_muted();
                     self.mic.update_muted_state();
                     let now_muted = self.mic.is_muted();
                     log::debug!(
-                        "Checking mic state (IDT_MIC_STATE_TIMER was_muted={was_muted} now_muted={now_muted})"
+                        "Checked mic state (IDT_MIC_STATE_TIMER was_muted={was_muted} now_muted={now_muted})"
                     );
                     if was_muted != now_muted {
                         self.paint.render(window, &self.metrics, now_muted);
@@ -289,8 +304,9 @@ impl ProcHandler for InfoBand {
                     LRESULT(0)
                 }
                 IDT_Z_ORDER_TIMER => {
+                    self.timers.z_order.kill(window);
+
                     log::debug!("Rechecking z-order (IDT_Z_ORDER_TIMER)",);
-                    self.z_order.kill_timer(window);
                     self.z_order.update(window);
                     LRESULT(0)
                 }
