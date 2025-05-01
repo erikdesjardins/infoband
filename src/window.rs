@@ -1,6 +1,6 @@
 use crate::constants::{
-    HOTKEY_MIC_MUTE, UM_ENABLE_DEBUG_PAINT, UM_INITIAL_METRICS, UM_INITIAL_MIC_STATE,
-    UM_INITIAL_PAINT, UM_INITIAL_Z_ORDER, UM_SET_OFFSET_FROM_RIGHT,
+    HOTKEY_MIC_MUTE, UM_ENABLE_DEBUG_PAINT, UM_ENABLE_KEEP_AWAKE, UM_INITIAL_METRICS,
+    UM_INITIAL_MIC_STATE, UM_INITIAL_PAINT, UM_INITIAL_Z_ORDER, UM_SET_OFFSET_FROM_RIGHT,
 };
 use crate::defer;
 use crate::opt::MicrophoneHotkey;
@@ -25,6 +25,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::{Error, HRESULT, Result, w};
 
+mod awake;
 mod messages;
 mod microphone;
 mod paint;
@@ -37,6 +38,7 @@ mod z_order;
 pub fn create_and_run_message_loop(
     offset_from_right: Unscaled<i32>,
     mic_hotkey: Option<MicrophoneHotkey>,
+    keep_awake_while_unlocked: bool,
     debug_paint: bool,
 ) -> Result<()> {
     // Initialize COM, to be used by the microphone management code.
@@ -135,6 +137,11 @@ pub fn create_and_run_message_loop(
                 u32::from(mic_hotkey.virtual_key_code),
             )?
         };
+    }
+
+    // Enqueue a message to tell the window to stay awake
+    if keep_awake_while_unlocked {
+        unsafe { PostMessageW(Some(window), WM_USER, UM_ENABLE_KEEP_AWAKE, LPARAM(0))? };
     }
 
     // Enqueue a message to tell the window about debug settings
