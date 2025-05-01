@@ -1,4 +1,6 @@
-use crate::constants::{DEFAULT_MIC_HOTKEY, DEFAULT_OFFSET_FROM_RIGHT};
+use crate::constants::{
+    DEFAULT_KEEP_AWAKE_WHILE_UNLOCKED, DEFAULT_MIC_HOTKEY, DEFAULT_OFFSET_FROM_RIGHT,
+};
 use crate::utils::Unscaled;
 use argh::FromArgs;
 use serde::{Deserialize, Serialize};
@@ -20,6 +22,8 @@ pub struct Cli {
 pub struct ConfigFile {
     pub offset_from_right: Unscaled<i32>,
     pub mic_hotkey: Option<MicrophoneHotkey>,
+    #[serde(default)]
+    pub keep_awake_while_unlocked: bool,
 }
 
 impl Default for ConfigFile {
@@ -27,6 +31,7 @@ impl Default for ConfigFile {
         Self {
             offset_from_right: DEFAULT_OFFSET_FROM_RIGHT,
             mic_hotkey: DEFAULT_MIC_HOTKEY,
+            keep_awake_while_unlocked: DEFAULT_KEEP_AWAKE_WHILE_UNLOCKED,
         }
     }
 }

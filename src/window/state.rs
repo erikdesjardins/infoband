@@ -1,12 +1,13 @@
 use crate::constants::{
     HOTKEY_MIC_MUTE, HSHELL_RUDEAPPACTIVATED, HSHELL_WINDOWACTIVATED, IDT_FETCH_AND_REDRAW_TIMER,
     IDT_MIC_STATE_TIMER, IDT_Z_ORDER_TIMER, REDRAW_EVERY_N_FETCHES, UM_ENABLE_DEBUG_PAINT,
-    UM_INITIAL_METRICS, UM_INITIAL_MIC_STATE, UM_INITIAL_PAINT, UM_INITIAL_Z_ORDER,
-    UM_QUEUE_MIC_STATE_CHECK, UM_SET_OFFSET_FROM_RIGHT, WTS_SESSION_LOCK, WTS_SESSION_LOGOFF,
-    WTS_SESSION_LOGON, WTS_SESSION_UNLOCK,
+    UM_ENABLE_KEEP_AWAKE, UM_INITIAL_METRICS, UM_INITIAL_MIC_STATE, UM_INITIAL_PAINT,
+    UM_INITIAL_Z_ORDER, UM_QUEUE_MIC_STATE_CHECK, UM_SET_OFFSET_FROM_RIGHT, WTS_SESSION_LOCK,
+    WTS_SESSION_LOGOFF, WTS_SESSION_LOGON, WTS_SESSION_UNLOCK,
 };
 use crate::metrics::Metrics;
 use crate::utils::{ScaleBy, Unscaled};
+use crate::window::awake::Awake;
 use crate::window::messages;
 use crate::window::microphone::Microphone;
 use crate::window::paint::Paint;
@@ -26,9 +27,11 @@ pub struct InfoBand {
     shellhook_message: u32,
     /// Timer state.
     timers: Timers,
+    /// Awake state.
+    awake: Awake,
     /// Paint state.
     paint: Paint,
-    /// Z=order state.
+    /// Z-order state.
     z_order: ZOrder,
     /// Microphone state.
     mic: Microphone,
@@ -49,6 +52,7 @@ impl ProcHandler for InfoBand {
         Ok(Self {
             shellhook_message,
             timers: Timers::new(),
+            awake: Awake::new(),
             paint: Paint::new(window)?,
             z_order: ZOrder::new()?,
             mic: Microphone::new(window)?,
@@ -130,6 +134,11 @@ impl ProcHandler for InfoBand {
                 LRESULT(0)
             }
             WM_USER => match wparam {
+                UM_ENABLE_KEEP_AWAKE => {
+                    log::info!("Enabling keep awake (UM_ENABLE_KEEP_AWAKE)");
+                    self.awake.keep_awake(true);
+                    LRESULT(0)
+                }
                 UM_ENABLE_DEBUG_PAINT => {
                     log::info!("Enabling debug paint (UM_ENABLE_DEBUG_PAINT)");
                     self.paint.set_debug(true);
@@ -222,23 +231,27 @@ impl ProcHandler for InfoBand {
             },
             WM_WTSSESSION_CHANGE => match wparam {
                 WTS_SESSION_LOGON => {
-                    log::info!("Resuming updates due to logon (WTS_SESSION_LOGON)");
+                    log::info!("Resuming updates & keep-awake due to logon (WTS_SESSION_LOGON)");
                     self.timers.fetch_and_redraw.reschedule(window);
+                    self.awake.keep_awake(true);
                     LRESULT(0)
                 }
                 WTS_SESSION_LOGOFF => {
-                    log::info!("Pausing updates due to logoff (WTS_SESSION_LOGOFF)");
+                    log::info!("Pausing updates & keep-awake due to logoff (WTS_SESSION_LOGOFF)");
                     self.timers.fetch_and_redraw.kill(window);
+                    self.awake.keep_awake(false);
                     LRESULT(0)
                 }
                 WTS_SESSION_LOCK => {
-                    log::info!("Pausing updates due to lock (WTS_SESSION_LOCK)");
+                    log::info!("Pausing updates & keep-awake due to lock (WTS_SESSION_LOCK)");
                     self.timers.fetch_and_redraw.kill(window);
+                    self.awake.keep_awake(false);
                     LRESULT(0)
                 }
                 WTS_SESSION_UNLOCK => {
-                    log::info!("Resuming updates due to unlock (WTS_SESSION_UNLOCK)");
+                    log::info!("Resuming updates & keep-awake due to unlock (WTS_SESSION_UNLOCK)");
                     self.timers.fetch_and_redraw.reschedule(window);
+                    self.awake.keep_awake(true);
                     LRESULT(0)
                 }
                 _ => {

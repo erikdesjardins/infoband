@@ -106,15 +106,18 @@ pub const DEFAULT_MIC_HOTKEY: Option<MicrophoneHotkey> = if cfg!(debug_assertion
 } else {
     None
 };
+// Enable by default when debugging so it's easier to test
+pub const DEFAULT_KEEP_AWAKE_WHILE_UNLOCKED: bool = cfg!(debug_assertions);
 
 // User messages
-pub const UM_ENABLE_DEBUG_PAINT: WPARAM = WPARAM(1);
-pub const UM_SET_OFFSET_FROM_RIGHT: WPARAM = WPARAM(2);
-pub const UM_INITIAL_METRICS: WPARAM = WPARAM(3);
-pub const UM_INITIAL_MIC_STATE: WPARAM = WPARAM(4);
-pub const UM_INITIAL_Z_ORDER: WPARAM = WPARAM(5);
-pub const UM_INITIAL_PAINT: WPARAM = WPARAM(6);
-pub const UM_QUEUE_MIC_STATE_CHECK: WPARAM = WPARAM(7);
+pub const UM_ENABLE_KEEP_AWAKE: WPARAM = WPARAM(1);
+pub const UM_ENABLE_DEBUG_PAINT: WPARAM = WPARAM(2);
+pub const UM_SET_OFFSET_FROM_RIGHT: WPARAM = WPARAM(3);
+pub const UM_INITIAL_METRICS: WPARAM = WPARAM(4);
+pub const UM_INITIAL_MIC_STATE: WPARAM = WPARAM(5);
+pub const UM_INITIAL_Z_ORDER: WPARAM = WPARAM(6);
+pub const UM_INITIAL_PAINT: WPARAM = WPARAM(7);
+pub const UM_QUEUE_MIC_STATE_CHECK: WPARAM = WPARAM(8);
 
 // Timer ids
 pub const IDT_FETCH_AND_REDRAW_TIMER: WPARAM = WPARAM(1);

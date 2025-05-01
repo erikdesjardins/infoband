@@ -63,12 +63,17 @@ fn main() -> Result<()> {
     let opt::ConfigFile {
         offset_from_right,
         mic_hotkey,
+        keep_awake_while_unlocked,
     } = config;
 
     log::info!("Started up infoband {}", env!("CARGO_PKG_VERSION"));
 
-    if let Err(e) = window::create_and_run_message_loop(offset_from_right, mic_hotkey, debug_paint)
-    {
+    if let Err(e) = window::create_and_run_message_loop(
+        offset_from_right,
+        mic_hotkey,
+        keep_awake_while_unlocked,
+        debug_paint,
+    ) {
         log::error!("Failed to create and run message loop: {e}");
         return Err(e);
     }
