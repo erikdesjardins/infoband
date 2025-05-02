@@ -6,8 +6,7 @@ use windows::Win32::System::Power::{
 use windows::core::{Error, Result};
 
 pub struct Awake {
-    enabled: Cell<bool>,
-    currently_kept_awake: Cell<bool>,
+    currently_kept_awake: Cell<Option<bool>>,
 }
 
 impl Drop for Awake {
@@ -19,9 +18,12 @@ impl Drop for Awake {
 impl Awake {
     pub fn new() -> Self {
         Self {
-            enabled: Cell::new(false),
-            currently_kept_awake: Cell::new(false),
+            currently_kept_awake: Cell::new(None),
         }
+    }
+
+    pub fn enable(&self) {
+        self.currently_kept_awake.set(Some(false));
     }
 
     pub fn keep_awake(&self, awake: bool) {
@@ -31,10 +33,11 @@ impl Awake {
     }
 
     fn keep_awake_fallible(&self, awake: bool) -> Result<()> {
-        if !self.enabled.get() {
+        let Some(current_state) = self.currently_kept_awake.get() else {
+            // Disabled, do nothing.
             return Ok(());
-        }
-        if self.currently_kept_awake.get() == awake {
+        };
+        if current_state == awake {
             return Ok(());
         }
 
@@ -50,7 +53,7 @@ impl Awake {
             return Err(Error::from_win32());
         }
 
-        self.currently_kept_awake.set(awake);
+        self.currently_kept_awake.set(Some(awake));
         Ok(())
     }
 }
