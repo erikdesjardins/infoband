@@ -136,6 +136,7 @@ impl ProcHandler for InfoBand {
             WM_USER => match wparam {
                 UM_ENABLE_KEEP_AWAKE => {
                     log::info!("Enabling keep awake (UM_ENABLE_KEEP_AWAKE)");
+                    self.awake.enable();
                     self.awake.keep_awake(true);
                     LRESULT(0)
                 }
