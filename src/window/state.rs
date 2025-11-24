@@ -1,9 +1,9 @@
 use crate::constants::{
     HOTKEY_MIC_MUTE, HSHELL_RUDEAPPACTIVATED, HSHELL_WINDOWACTIVATED, IDT_FETCH_AND_REDRAW_TIMER,
-    IDT_MIC_STATE_TIMER, IDT_Z_ORDER_TIMER, REDRAW_EVERY_N_FETCHES, UM_ENABLE_DEBUG_PAINT,
-    UM_ENABLE_KEEP_AWAKE, UM_INITIAL_METRICS, UM_INITIAL_MIC_STATE, UM_INITIAL_RENDER,
-    UM_QUEUE_MIC_STATE_CHECK, WTS_SESSION_LOCK, WTS_SESSION_LOGOFF, WTS_SESSION_LOGON,
-    WTS_SESSION_UNLOCK,
+    IDT_MIC_STATE_TIMER, IDT_TRAY_POSITION_TIMER, IDT_Z_ORDER_TIMER, REDRAW_EVERY_N_FETCHES,
+    UM_ENABLE_DEBUG_PAINT, UM_ENABLE_KEEP_AWAKE, UM_INITIAL_METRICS, UM_INITIAL_MIC_STATE,
+    UM_INITIAL_RENDER, UM_QUEUE_MIC_STATE_CHECK, UM_QUEUE_TRAY_POSITION_CHECK, WTS_SESSION_LOCK,
+    WTS_SESSION_LOGOFF, WTS_SESSION_LOGON, WTS_SESSION_UNLOCK,
 };
 use crate::metrics::Metrics;
 use crate::utils::ScaleBy;
@@ -54,7 +54,7 @@ impl ProcHandler for InfoBand {
             timers: Timers::new(),
             awake: Awake::new(),
             paint: Paint::new()?,
-            position: Position::new()?,
+            position: Position::new(window)?,
             mic: Microphone::new(window)?,
             metrics: Metrics::new()?,
         })
@@ -115,6 +115,7 @@ impl ProcHandler for InfoBand {
                     "DPI changed to {dpi_raw} or {}% (WM_DPICHANGED)",
                     100.scale_by(dpi)
                 );
+                self.position.update_tray_position();
                 let (rect, dpi) = self.position.recompute();
                 self.paint
                     .render(window, rect, dpi, &self.metrics, self.mic.is_muted());
@@ -167,6 +168,12 @@ impl ProcHandler for InfoBand {
                     let (rect, dpi) = self.position.recompute();
                     self.paint
                         .render(window, rect, dpi, &self.metrics, self.mic.is_muted());
+                    LRESULT(0)
+                }
+                UM_QUEUE_TRAY_POSITION_CHECK => {
+                    log::debug!("Queuing tray position check (UM_QUEUE_TRAY_POSITION_CHECK)");
+                    // If multiple notifications are received in quick succession, rescheduling the timer effectively debounces them.
+                    self.timers.tray_position.reschedule(window);
                     LRESULT(0)
                 }
                 UM_QUEUE_MIC_STATE_CHECK => {
@@ -296,6 +303,23 @@ impl ProcHandler for InfoBand {
                     }
                     LRESULT(0)
                 }
+                IDT_TRAY_POSITION_TIMER => {
+                    self.timers.tray_position.kill(window);
+
+                    log::debug!("Rechecking tray position (IDT_TRAY_POSITION_TIMER)",);
+                    self.position.update_tray_position();
+                    let (rect, dpi) = self.position.recompute();
+                    self.paint
+                        .render(window, rect, dpi, &self.metrics, self.mic.is_muted());
+                    LRESULT(0)
+                }
+                IDT_Z_ORDER_TIMER => {
+                    self.timers.z_order.kill(window);
+
+                    log::debug!("Rechecking z-order (IDT_Z_ORDER_TIMER)",);
+                    self.position.update_z_order(window);
+                    LRESULT(0)
+                }
                 IDT_MIC_STATE_TIMER => {
                     self.timers.mic_state.kill(window);
 
@@ -310,13 +334,6 @@ impl ProcHandler for InfoBand {
                         self.paint
                             .render(window, rect, dpi, &self.metrics, now_muted);
                     }
-                    LRESULT(0)
-                }
-                IDT_Z_ORDER_TIMER => {
-                    self.timers.z_order.kill(window);
-
-                    log::debug!("Rechecking z-order (IDT_Z_ORDER_TIMER)",);
-                    self.position.update_z_order(window);
                     LRESULT(0)
                 }
                 _ => {

@@ -1,5 +1,6 @@
 use crate::constants::MICROPHONE_WARNING_WIDTH;
 use crate::utils::ScalingFactor;
+use crate::window::position::listener::TrayListenerManager;
 use std::cell::{Cell, RefCell};
 use std::mem;
 use windows::Win32::Foundation::{
@@ -22,6 +23,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::{Error, HRESULT, Result, w};
 
+mod listener;
+
 /// Manages the position and z-order of the window.
 ///
 /// In order to properly handle fullscreen windows, we need to match the z-order of the Windows taskbar.
@@ -36,7 +39,7 @@ pub struct Position {
     /// The shell window, displaying the Windows taskbar.
     shell: Cell<HWND>,
     /// System tray area.
-    tray: RefCell<IUIAutomationElement>,
+    tray: RefCell<TrayListenerManager>,
     /// DPI scaling factor of the window.
     dpi: Cell<ScalingFactor>,
     /// Size and position of the taskbar on the primary monitor.
@@ -50,13 +53,13 @@ pub struct Position {
 }
 
 impl Position {
-    pub fn new() -> Result<Self> {
+    pub fn new(window: HWND) -> Result<Self> {
         let automation: IUIAutomation =
             unsafe { CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)? };
 
-        let shell = get_shell_window()?;
+        let (shell, tray) = get_shell_window_and_system_tray(&automation)?;
 
-        let tray = get_system_tray(&automation, shell)?;
+        let tray = TrayListenerManager::new(window, automation.clone(), tray)?;
 
         let dpi = unsafe { GetDpiForWindow(shell) };
         let dpi = ScalingFactor::from_ratio(dpi, USER_DEFAULT_SCREEN_DPI);
@@ -139,7 +142,8 @@ impl Position {
     }
 
     fn get_left_edge_of_tray(&self) -> Result<i32> {
-        let first_tray_button = get_first_tray_button(&self.automation, &self.tray.borrow())?;
+        let first_tray_button =
+            get_first_tray_button(&self.automation, self.tray.borrow().element())?;
 
         let rect = unsafe { first_tray_button.CurrentBoundingRectangle()? };
 
@@ -208,7 +212,10 @@ impl Position {
             Ok(is_topmost) => Ok(is_topmost),
             Err(e) if e.code() == HRESULT::from(ERROR_INVALID_WINDOW_HANDLE) => {
                 log::warn!("Shell window handle is invalid (explorer crashed?); refetching");
-                self.shell.set(get_shell_window()?);
+                let (shell, tray) = get_shell_window_and_system_tray(&self.automation)?;
+                self.shell.set(shell);
+                self.tray.borrow_mut().refresh_element(tray)?;
+
                 is_window_topmost(self.shell.get())
             }
             Err(e) => Err(e),
@@ -236,24 +243,10 @@ impl Position {
     }
 }
 
-fn get_shell_window() -> Result<HWND> {
-    unsafe { FindWindowW(w!("Shell_TrayWnd"), None) }
-}
-
-fn is_window_topmost(handle: HWND) -> Result<bool> {
-    let style = {
-        let res = unsafe { GetWindowLongW(handle, GWL_EXSTYLE) };
-        if res == 0 {
-            return Err(Error::from_win32());
-        }
-        WINDOW_EX_STYLE(res as u32)
-    };
-
-    Ok(style.contains(WS_EX_TOPMOST))
-}
-
-fn get_system_tray(automation: &IUIAutomation, shell: HWND) -> Result<IUIAutomationElement> {
-    let shell = unsafe { automation.ElementFromHandle(shell)? };
+fn get_shell_window_and_system_tray(
+    automation: &IUIAutomation,
+) -> Result<(HWND, IUIAutomationElement)> {
+    let shell = unsafe { FindWindowW(w!("Shell_TrayWnd"), None)? };
 
     let role_is_pane = unsafe {
         automation.CreatePropertyCondition(
@@ -262,14 +255,22 @@ fn get_system_tray(automation: &IUIAutomation, shell: HWND) -> Result<IUIAutomat
         )?
     };
 
-    match unsafe { shell.FindFirst(TreeScope_Descendants, &role_is_pane) } {
-        Ok(tray) => Ok(tray),
-        Err(e) if e.code() == HRESULT::from(ERROR_SUCCESS) => Err(Error::new(
-            ERROR_EMPTY.into(),
-            "System tray not found in shell window",
-        )),
-        Err(e) => Err(e),
-    }
+    let tray = match unsafe {
+        automation
+            .ElementFromHandle(shell)?
+            .FindFirst(TreeScope_Descendants, &role_is_pane)
+    } {
+        Ok(tray) => tray,
+        Err(e) if e.code() == HRESULT::from(ERROR_SUCCESS) => {
+            return Err(Error::new(
+                ERROR_EMPTY.into(),
+                "System tray not found in shell window",
+            ));
+        }
+        Err(e) => return Err(e),
+    };
+
+    Ok((shell, tray))
 }
 
 fn get_first_tray_button(
@@ -291,4 +292,16 @@ fn get_first_tray_button(
         )),
         Err(e) => Err(e),
     }
+}
+
+fn is_window_topmost(handle: HWND) -> Result<bool> {
+    let style = {
+        let res = unsafe { GetWindowLongW(handle, GWL_EXSTYLE) };
+        if res == 0 {
+            return Err(Error::from_win32());
+        }
+        WINDOW_EX_STYLE(res as u32)
+    };
+
+    Ok(style.contains(WS_EX_TOPMOST))
 }
