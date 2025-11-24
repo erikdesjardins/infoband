@@ -1,10 +1,9 @@
 use crate::constants::{
     HOTKEY_MIC_MUTE, UM_ENABLE_DEBUG_PAINT, UM_ENABLE_KEEP_AWAKE, UM_INITIAL_METRICS,
-    UM_INITIAL_MIC_STATE, UM_INITIAL_PAINT, UM_INITIAL_Z_ORDER, UM_SET_OFFSET_FROM_RIGHT,
+    UM_INITIAL_MIC_STATE, UM_INITIAL_RENDER,
 };
 use crate::defer;
 use crate::opt::MicrophoneHotkey;
-use crate::utils::Unscaled;
 use crate::window::proc::window_proc;
 use windows::Win32::Foundation::{HINSTANCE, LPARAM};
 use windows::Win32::System::Com::{
@@ -29,14 +28,13 @@ mod awake;
 mod messages;
 mod microphone;
 mod paint;
+mod position;
 mod proc;
 mod state;
 mod timers;
-mod z_order;
 
 /// Create the toplevel window, start timers for updating it, and pump the windows message loop.
 pub fn create_and_run_message_loop(
-    offset_from_right: Unscaled<i32>,
     mic_hotkey: Option<MicrophoneHotkey>,
     keep_awake_while_unlocked: bool,
     debug_paint: bool,
@@ -149,17 +147,6 @@ pub fn create_and_run_message_loop(
         unsafe { PostMessageW(Some(window), WM_USER, UM_ENABLE_DEBUG_PAINT, LPARAM(0))? };
     }
 
-    // Enqueue a message to tell the window about the offset from the right edge of the screen
-    let offset = offset_from_right.into_inner() as _;
-    unsafe {
-        PostMessageW(
-            Some(window),
-            WM_USER,
-            UM_SET_OFFSET_FROM_RIGHT,
-            LPARAM(offset),
-        )?
-    };
-
     // Enqueue a message for initial metrics fetch
     unsafe { PostMessageW(Some(window), WM_USER, UM_INITIAL_METRICS, LPARAM(0))? };
 
@@ -168,11 +155,8 @@ pub fn create_and_run_message_loop(
         unsafe { PostMessageW(Some(window), WM_USER, UM_INITIAL_MIC_STATE, LPARAM(0))? };
     }
 
-    // Enqueue a message for initial z-order update
-    unsafe { PostMessageW(Some(window), WM_USER, UM_INITIAL_Z_ORDER, LPARAM(0))? };
-
-    // Enqueue a message for initial paint
-    unsafe { PostMessageW(Some(window), WM_USER, UM_INITIAL_PAINT, LPARAM(0))? };
+    // Enqueue a message for initial render
+    unsafe { PostMessageW(Some(window), WM_USER, UM_INITIAL_RENDER, LPARAM(0))? };
 
     // Show window (without activating/focusing it) after setting it up.
     // Note that layered windows still don't render until you call UpdateLayeredWindow.

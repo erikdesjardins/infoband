@@ -1,19 +1,19 @@
 use crate::constants::{
     HOTKEY_MIC_MUTE, HSHELL_RUDEAPPACTIVATED, HSHELL_WINDOWACTIVATED, IDT_FETCH_AND_REDRAW_TIMER,
     IDT_MIC_STATE_TIMER, IDT_Z_ORDER_TIMER, REDRAW_EVERY_N_FETCHES, UM_ENABLE_DEBUG_PAINT,
-    UM_ENABLE_KEEP_AWAKE, UM_INITIAL_METRICS, UM_INITIAL_MIC_STATE, UM_INITIAL_PAINT,
-    UM_INITIAL_Z_ORDER, UM_QUEUE_MIC_STATE_CHECK, UM_SET_OFFSET_FROM_RIGHT, WTS_SESSION_LOCK,
-    WTS_SESSION_LOGOFF, WTS_SESSION_LOGON, WTS_SESSION_UNLOCK,
+    UM_ENABLE_KEEP_AWAKE, UM_INITIAL_METRICS, UM_INITIAL_MIC_STATE, UM_INITIAL_RENDER,
+    UM_QUEUE_MIC_STATE_CHECK, WTS_SESSION_LOCK, WTS_SESSION_LOGOFF, WTS_SESSION_LOGON,
+    WTS_SESSION_UNLOCK,
 };
 use crate::metrics::Metrics;
-use crate::utils::{ScaleBy, Unscaled};
+use crate::utils::ScaleBy;
 use crate::window::awake::Awake;
 use crate::window::messages;
 use crate::window::microphone::Microphone;
 use crate::window::paint::Paint;
+use crate::window::position::Position;
 use crate::window::proc::ProcHandler;
 use crate::window::timers::Timers;
-use crate::window::z_order::ZOrder;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
     PostQuitMessage, RegisterWindowMessageW, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED,
@@ -31,8 +31,8 @@ pub struct InfoBand {
     awake: Awake,
     /// Paint state.
     paint: Paint,
-    /// Z-order state.
-    z_order: ZOrder,
+    /// Position and z-order state.
+    position: Position,
     /// Microphone state.
     mic: Microphone,
     /// Performance metrics.
@@ -53,8 +53,8 @@ impl ProcHandler for InfoBand {
             shellhook_message,
             timers: Timers::new(),
             awake: Awake::new(),
-            paint: Paint::new(window)?,
-            z_order: ZOrder::new()?,
+            paint: Paint::new()?,
+            position: Position::new()?,
             mic: Microphone::new(window)?,
             metrics: Metrics::new()?,
         })
@@ -110,21 +110,22 @@ impl ProcHandler for InfoBand {
             WM_DPICHANGED => {
                 // Low 16 bits contains DPI
                 let dpi_raw = u32::from(wparam.0 as u16);
-                let dpi = self.paint.set_dpi(dpi_raw);
+                let dpi = self.position.set_dpi(dpi_raw);
                 log::info!(
                     "DPI changed to {dpi_raw} or {}% (WM_DPICHANGED)",
                     100.scale_by(dpi)
                 );
-                self.paint.update_size_and_position();
+                let (rect, dpi) = self.position.recompute();
                 self.paint
-                    .render(window, &self.metrics, self.mic.is_muted());
+                    .render(window, rect, dpi, &self.metrics, self.mic.is_muted());
                 LRESULT(0)
             }
             WM_DISPLAYCHANGE => {
                 log::debug!("Display resolution changed (WM_DISPLAYCHANGE)");
-                self.paint.update_size_and_position();
+                self.position.update_taskbar_position();
+                let (rect, dpi) = self.position.recompute();
                 self.paint
-                    .render(window, &self.metrics, self.mic.is_muted());
+                    .render(window, rect, dpi, &self.metrics, self.mic.is_muted());
                 LRESULT(0)
             }
             WM_DESTROY => {
@@ -145,12 +146,11 @@ impl ProcHandler for InfoBand {
                     self.paint.set_debug(true);
                     LRESULT(0)
                 }
-                UM_SET_OFFSET_FROM_RIGHT => {
-                    let offset_from_right = Unscaled::new(lparam.0 as _);
-                    log::info!(
-                        "Setting offset from right to {offset_from_right} (UM_SET_OFFSET_FROM_RIGHT)"
-                    );
-                    self.paint.set_offset_from_right(offset_from_right);
+                UM_INITIAL_METRICS => {
+                    log::info!("Initial metrics fetch (UM_INITIAL_METRICS)");
+                    self.metrics.fetch();
+                    // Start timer for fetching metrics and redrawing.
+                    self.timers.fetch_and_redraw.reschedule(window);
                     LRESULT(0)
                 }
                 UM_INITIAL_MIC_STATE => {
@@ -159,24 +159,14 @@ impl ProcHandler for InfoBand {
                     self.mic.update_muted_state();
                     LRESULT(0)
                 }
-                UM_INITIAL_METRICS => {
-                    log::info!("Initial metrics fetch (UM_INITIAL_METRICS)");
-                    self.metrics.fetch();
-                    // Start timer for fetching metrics and redrawing.
-                    self.timers.fetch_and_redraw.reschedule(window);
-                    LRESULT(0)
-                }
-                UM_INITIAL_Z_ORDER => {
-                    log::info!("Initial z-order update (UM_INITIAL_Z_ORDER)");
-                    self.z_order.touch_window(window);
-                    self.z_order.update(window);
-                    LRESULT(0)
-                }
-                UM_INITIAL_PAINT => {
-                    log::info!("Initial paint (UM_INITIAL_PAINT)");
-                    self.paint.update_size_and_position();
+                UM_INITIAL_RENDER => {
+                    log::info!("Initial position & paint (UM_INITIAL_RENDER)");
+                    self.position.update_taskbar_position();
+                    self.position.update_tray_position();
+                    self.position.update_z_order(window);
+                    let (rect, dpi) = self.position.recompute();
                     self.paint
-                        .render(window, &self.metrics, self.mic.is_muted());
+                        .render(window, rect, dpi, &self.metrics, self.mic.is_muted());
                     LRESULT(0)
                 }
                 UM_QUEUE_MIC_STATE_CHECK => {
@@ -202,7 +192,7 @@ impl ProcHandler for InfoBand {
                         "Reapplying z-order due to shell focus (SHELLHOOK id=0x{:08x})",
                         wparam.0
                     );
-                    self.z_order.update(window);
+                    self.position.update_z_order(window);
                     LRESULT(0)
                 }
                 (
@@ -278,7 +268,9 @@ impl ProcHandler for InfoBand {
                         "Toggled mic mute (WM_HOTKEY was_muted={was_muted} now_muted={now_muted})"
                     );
                     if was_muted != now_muted {
-                        self.paint.render(window, &self.metrics, now_muted);
+                        let (rect, dpi) = self.position.get();
+                        self.paint
+                            .render(window, rect, dpi, &self.metrics, now_muted);
                     }
                     LRESULT(0)
                 }
@@ -296,10 +288,11 @@ impl ProcHandler for InfoBand {
                     log::trace!("Fetching metrics (IDT_FETCH_AND_REDRAW_TIMER)");
                     let fetch_count = self.metrics.fetch();
 
-                    if fetch_count % REDRAW_EVERY_N_FETCHES == 0 {
+                    if fetch_count.is_multiple_of(REDRAW_EVERY_N_FETCHES) {
                         log::trace!("Starting repaint (IDT_FETCH_AND_REDRAW_TIMER)");
+                        let (rect, dpi) = self.position.get();
                         self.paint
-                            .render(window, &self.metrics, self.mic.is_muted());
+                            .render(window, rect, dpi, &self.metrics, self.mic.is_muted());
                     }
                     LRESULT(0)
                 }
@@ -313,7 +306,9 @@ impl ProcHandler for InfoBand {
                         "Checked mic state (IDT_MIC_STATE_TIMER was_muted={was_muted} now_muted={now_muted})"
                     );
                     if was_muted != now_muted {
-                        self.paint.render(window, &self.metrics, now_muted);
+                        let (rect, dpi) = self.position.get();
+                        self.paint
+                            .render(window, rect, dpi, &self.metrics, now_muted);
                     }
                     LRESULT(0)
                 }
@@ -321,7 +316,7 @@ impl ProcHandler for InfoBand {
                     self.timers.z_order.kill(window);
 
                     log::debug!("Rechecking z-order (IDT_Z_ORDER_TIMER)",);
-                    self.z_order.update(window);
+                    self.position.update_z_order(window);
                     LRESULT(0)
                 }
                 _ => {

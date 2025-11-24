@@ -165,10 +165,6 @@ where
         self.0.scale_by(by)
     }
 
-    pub fn into_inner(self) -> T {
-        self.0
-    }
-
     pub const fn as_inner(&self) -> &T {
         &self.0
     }

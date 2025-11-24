@@ -1,12 +1,28 @@
-use std::cell::Cell;
-use windows::Win32::Foundation::{ERROR_INVALID_WINDOW_HANDLE, HWND};
+use crate::constants::MICROPHONE_WARNING_WIDTH;
+use crate::utils::ScalingFactor;
+use std::cell::{Cell, RefCell};
+use std::mem;
+use windows::Win32::Foundation::{
+    ERROR_EMPTY, ERROR_INVALID_WINDOW_HANDLE, ERROR_SUCCESS, HWND, RECT,
+};
+use windows::Win32::Graphics::Gdi::{
+    GetMonitorInfoW, MONITOR_DEFAULTTOPRIMARY, MONITORINFO, MonitorFromWindow,
+};
+use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance};
+use windows::Win32::System::Variant::VARIANT;
+use windows::Win32::UI::Accessibility::{
+    CUIAutomation, IUIAutomation, IUIAutomationElement, ROLE_SYSTEM_PANE, ROLE_SYSTEM_PUSHBUTTON,
+    TreeScope_Children, TreeScope_Descendants, UIA_LegacyIAccessibleRolePropertyId,
+};
+use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
     FindWindowW, GWL_EXSTYLE, GetWindowLongW, HWND_BOTTOM, HWND_TOPMOST, SWP_NOMOVE,
-    SWP_NOSENDCHANGING, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, WINDOW_EX_STYLE, WS_EX_TOPMOST,
+    SWP_NOSENDCHANGING, SWP_NOSIZE, SetWindowPos, USER_DEFAULT_SCREEN_DPI, WINDOW_EX_STYLE,
+    WS_EX_TOPMOST,
 };
 use windows::core::{Error, HRESULT, Result, w};
 
-/// Manages the z-order of the window.
+/// Manages the position and z-order of the window.
 ///
 /// In order to properly handle fullscreen windows, we need to match the z-order of the Windows taskbar.
 /// Naturally, there is no proper API for this, and the logic that the taskbar itself uses is hacky and has bugs.
@@ -15,57 +31,171 @@ use windows::core::{Error, HRESULT, Result, w};
 ///
 /// Big thanks to RudeWindowFixer, which contains a reverse engineered description of the taskbar's logic:
 /// https://github.com/dechamps/RudeWindowFixer
-pub struct ZOrder {
+pub struct Position {
+    automation: IUIAutomation,
     /// The shell window, displaying the Windows taskbar.
     shell: Cell<HWND>,
+    /// System tray area.
+    tray: RefCell<IUIAutomationElement>,
+    /// DPI scaling factor of the window.
+    dpi: Cell<ScalingFactor>,
+    /// Size and position of the taskbar on the primary monitor.
+    taskbar: Cell<RECT>,
+    /// Left edge of the system tray area.
+    tray_left_edge: Cell<i32>,
+    /// Size and position of the window.
+    rect: Cell<RECT>,
     /// Whether our window is currently topmost.
     currently_topmost: Cell<Option<bool>>,
 }
 
-impl ZOrder {
+impl Position {
     pub fn new() -> Result<Self> {
+        let automation: IUIAutomation =
+            unsafe { CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)? };
+
         let shell = get_shell_window()?;
 
+        let tray = get_system_tray(&automation, shell)?;
+
+        let dpi = unsafe { GetDpiForWindow(shell) };
+        let dpi = ScalingFactor::from_ratio(dpi, USER_DEFAULT_SCREEN_DPI);
+
+        // Window starts out not displayed, with size and position zero.
+        let empty = RECT {
+            top: 0,
+            bottom: 0,
+            left: 0,
+            right: 0,
+        };
+
         Ok(Self {
+            automation,
             shell: Cell::new(shell),
+            tray: RefCell::new(tray),
+            dpi: Cell::new(dpi),
+            taskbar: Cell::new(empty),
+            tray_left_edge: Cell::new(0),
+            rect: Cell::new(empty),
             // Initial state is "unknown".
             // (We always need to call it at least once, since it might not be all the way on the top or bottom.)
             currently_topmost: Cell::new(None),
         })
     }
 
-    /// For some reason, the first call to SetWindowPos does nothing;
-    /// so this fn must be called once before the first call to `update`.
-    pub fn touch_window(&self, window: HWND) {
-        if let Err(e) = self.touch_window_fallible(window) {
-            log::error!("Touching window failed: {e}");
+    pub fn get(&self) -> (RECT, ScalingFactor) {
+        (self.rect.get(), self.dpi.get())
+    }
+
+    pub fn set_dpi(&self, dpi: u32) -> ScalingFactor {
+        let dpi = ScalingFactor::from_ratio(dpi, USER_DEFAULT_SCREEN_DPI);
+        self.dpi.set(dpi);
+        dpi
+    }
+
+    pub fn update_taskbar_position(&self) {
+        match self.get_taskbar_position() {
+            Ok(rect) => {
+                self.taskbar.set(rect);
+            }
+            Err(e) => {
+                log::error!("Update taskbar position failed, preserving old position: {e}");
+            }
         }
     }
 
-    pub fn touch_window_fallible(&self, window: HWND) -> Result<()> {
-        unsafe {
-            SetWindowPos(
-                window,
-                None,
-                0,
-                0,
-                0,
-                0,
-                SWP_NOZORDER | SWP_NOMOVE | SWP_NOSIZE | SWP_NOSENDCHANGING,
-            )?
+    fn get_taskbar_position(&self) -> Result<RECT> {
+        let monitor = unsafe { MonitorFromWindow(self.shell.get(), MONITOR_DEFAULTTOPRIMARY) };
+
+        // Get size of primary monitor
+        let monitor_info = {
+            let mut monitor_info = MONITORINFO {
+                cbSize: mem::size_of::<MONITORINFO>() as u32,
+                ..Default::default()
+            };
+            // SAFETY: lpmi is valid pointer to MONITORINFO
+            unsafe { GetMonitorInfoW(monitor, &mut monitor_info).ok()? };
+            monitor_info
         };
 
-        Ok(())
+        // Taskbar is below the work area to the edges of the monitor
+        Ok(RECT {
+            top: monitor_info.rcWork.bottom,
+            bottom: monitor_info.rcMonitor.bottom,
+            left: monitor_info.rcMonitor.left,
+            right: monitor_info.rcMonitor.right,
+        })
+    }
+
+    pub fn update_tray_position(&self) {
+        match self.get_left_edge_of_tray() {
+            Ok(left_edge) => {
+                self.tray_left_edge.set(left_edge);
+            }
+            Err(e) => {
+                log::error!("Update tray left edge failed, preserving old position: {e}");
+            }
+        }
+    }
+
+    fn get_left_edge_of_tray(&self) -> Result<i32> {
+        let first_tray_button = get_first_tray_button(&self.automation, &self.tray.borrow())?;
+
+        let rect = unsafe { first_tray_button.CurrentBoundingRectangle()? };
+
+        Ok(rect.left)
+    }
+
+    #[must_use = "Window position must be applied after recomputing"]
+    pub fn recompute(&self) -> (RECT, ScalingFactor) {
+        match self.recompute_fallible() {
+            Ok(rect) => {
+                self.rect.set(rect);
+            }
+            Err(e) => {
+                log::error!("Update window position failed, preserving old position: {e}");
+            }
+        }
+
+        (self.rect.get(), self.dpi.get())
+    }
+
+    fn recompute_fallible(&self) -> Result<RECT> {
+        let dpi = self.dpi.get();
+        let taskbar = self.taskbar.get();
+        let tray_left_edge = self.tray_left_edge.get();
+
+        let midpoint = |a, b| a + (b - a) / 2;
+
+        // Height is always the size of the taskbar
+        let top = taskbar.top;
+        let bottom = taskbar.bottom;
+        // Right edge is adjacent to right edge of system tray
+        let right = tray_left_edge;
+        // Left edge positioned at the horizontal center of the display, with enough room for the mic warning
+        let left =
+            midpoint(taskbar.left, taskbar.right) - MICROPHONE_WARNING_WIDTH.scale_by(dpi) / 2;
+
+        if top == bottom || left == right {
+            return Err(Error::new(ERROR_EMPTY.into(), "Draw rectange is empty"));
+        }
+
+        Ok(RECT {
+            top,
+            bottom,
+            left,
+            right,
+        })
     }
 
     /// Set our window's z-order to match the taskbar's.
-    pub fn update(&self, window: HWND) {
-        if let Err(e) = self.update_fallible(window) {
+    pub fn update_z_order(&self, window: HWND) {
+        if let Err(e) = self.update_z_order_fallible(window) {
             log::error!("Z-order update failed: {e}");
         }
     }
 
-    fn update_fallible(&self, window: HWND) -> Result<()> {
+    fn update_z_order_fallible(&self, window: HWND) -> Result<()> {
         let is_shell_topmost = self.is_shell_topmost()?;
 
         self.set_z_order_to(window, is_shell_topmost)?;
@@ -120,4 +250,45 @@ fn is_window_topmost(handle: HWND) -> Result<bool> {
     };
 
     Ok(style.contains(WS_EX_TOPMOST))
+}
+
+fn get_system_tray(automation: &IUIAutomation, shell: HWND) -> Result<IUIAutomationElement> {
+    let shell = unsafe { automation.ElementFromHandle(shell)? };
+
+    let role_is_pane = unsafe {
+        automation.CreatePropertyCondition(
+            UIA_LegacyIAccessibleRolePropertyId,
+            &VARIANT::from(ROLE_SYSTEM_PANE as i32),
+        )?
+    };
+
+    match unsafe { shell.FindFirst(TreeScope_Descendants, &role_is_pane) } {
+        Ok(tray) => Ok(tray),
+        Err(e) if e.code() == HRESULT::from(ERROR_SUCCESS) => Err(Error::new(
+            ERROR_EMPTY.into(),
+            "System tray not found in shell window",
+        )),
+        Err(e) => Err(e),
+    }
+}
+
+fn get_first_tray_button(
+    automation: &IUIAutomation,
+    tray: &IUIAutomationElement,
+) -> Result<IUIAutomationElement> {
+    let role_is_pushbutton = unsafe {
+        automation.CreatePropertyCondition(
+            UIA_LegacyIAccessibleRolePropertyId,
+            &VARIANT::from(ROLE_SYSTEM_PUSHBUTTON as i32),
+        )?
+    };
+
+    match unsafe { tray.FindFirst(TreeScope_Children, &role_is_pushbutton) } {
+        Ok(first_tray_button) => Ok(first_tray_button),
+        Err(e) if e.code() == HRESULT::from(ERROR_SUCCESS) => Err(Error::new(
+            ERROR_EMPTY.into(),
+            "No tray buttons found in system tray",
+        )),
+        Err(e) => Err(e),
+    }
 }
