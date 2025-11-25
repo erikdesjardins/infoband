@@ -110,23 +110,23 @@ impl ProcHandler for InfoBand {
             WM_DPICHANGED => {
                 // Low 16 bits contains DPI
                 let dpi_raw = u32::from(wparam.0 as u16);
-                let dpi = self.position.set_dpi(dpi_raw);
+                self.position.set_dpi(dpi_raw);
+                self.position.update_tray_position();
+                let (dpi, rect) = self.position.recompute();
                 log::info!(
                     "DPI changed to {dpi_raw} or {}% (WM_DPICHANGED)",
                     100.scale_by(dpi)
                 );
-                self.position.update_tray_position();
-                let (rect, dpi) = self.position.recompute();
                 self.paint
-                    .render(window, rect, dpi, &self.metrics, self.mic.is_muted());
+                    .render(window, dpi, rect, &self.metrics, self.mic.is_muted());
                 LRESULT(0)
             }
             WM_DISPLAYCHANGE => {
                 log::debug!("Display resolution changed (WM_DISPLAYCHANGE)");
                 self.position.update_taskbar_position();
-                let (rect, dpi) = self.position.recompute();
+                let (dpi, rect) = self.position.recompute();
                 self.paint
-                    .render(window, rect, dpi, &self.metrics, self.mic.is_muted());
+                    .render(window, dpi, rect, &self.metrics, self.mic.is_muted());
                 LRESULT(0)
             }
             WM_DESTROY => {
@@ -165,9 +165,9 @@ impl ProcHandler for InfoBand {
                     self.position.update_taskbar_position();
                     self.position.update_tray_position();
                     self.position.update_z_order(window);
-                    let (rect, dpi) = self.position.recompute();
+                    let (dpi, rect) = self.position.recompute();
                     self.paint
-                        .render(window, rect, dpi, &self.metrics, self.mic.is_muted());
+                        .render(window, dpi, rect, &self.metrics, self.mic.is_muted());
                     LRESULT(0)
                 }
                 UM_QUEUE_TRAY_POSITION_CHECK => {
@@ -275,9 +275,9 @@ impl ProcHandler for InfoBand {
                         "Toggled mic mute (WM_HOTKEY was_muted={was_muted} now_muted={now_muted})"
                     );
                     if was_muted != now_muted {
-                        let (rect, dpi) = self.position.get();
+                        let (dpi, rect) = self.position.get();
                         self.paint
-                            .render(window, rect, dpi, &self.metrics, now_muted);
+                            .render(window, dpi, rect, &self.metrics, now_muted);
                     }
                     LRESULT(0)
                 }
@@ -297,9 +297,9 @@ impl ProcHandler for InfoBand {
 
                     if fetch_count.is_multiple_of(REDRAW_EVERY_N_FETCHES) {
                         log::trace!("Starting repaint (IDT_FETCH_AND_REDRAW_TIMER)");
-                        let (rect, dpi) = self.position.get();
+                        let (dpi, rect) = self.position.get();
                         self.paint
-                            .render(window, rect, dpi, &self.metrics, self.mic.is_muted());
+                            .render(window, dpi, rect, &self.metrics, self.mic.is_muted());
                     }
                     LRESULT(0)
                 }
@@ -308,9 +308,9 @@ impl ProcHandler for InfoBand {
 
                     log::debug!("Rechecking tray position (IDT_TRAY_POSITION_TIMER)",);
                     self.position.update_tray_position();
-                    let (rect, dpi) = self.position.recompute();
+                    let (dpi, rect) = self.position.recompute();
                     self.paint
-                        .render(window, rect, dpi, &self.metrics, self.mic.is_muted());
+                        .render(window, dpi, rect, &self.metrics, self.mic.is_muted());
                     LRESULT(0)
                 }
                 IDT_Z_ORDER_TIMER => {
@@ -330,9 +330,9 @@ impl ProcHandler for InfoBand {
                         "Checked mic state (IDT_MIC_STATE_TIMER was_muted={was_muted} now_muted={now_muted})"
                     );
                     if was_muted != now_muted {
-                        let (rect, dpi) = self.position.get();
+                        let (dpi, rect) = self.position.get();
                         self.paint
-                            .render(window, rect, dpi, &self.metrics, now_muted);
+                            .render(window, dpi, rect, &self.metrics, now_muted);
                     }
                     LRESULT(0)
                 }

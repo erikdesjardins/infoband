@@ -86,14 +86,13 @@ impl Position {
         })
     }
 
-    pub fn get(&self) -> (RECT, ScalingFactor) {
-        (self.rect.get(), self.dpi.get())
+    pub fn get(&self) -> (ScalingFactor, RECT) {
+        (self.dpi.get(), self.rect.get())
     }
 
-    pub fn set_dpi(&self, dpi: u32) -> ScalingFactor {
-        let dpi = ScalingFactor::from_ratio(dpi, USER_DEFAULT_SCREEN_DPI);
+    pub fn set_dpi(&self, dpi_raw: u32) {
+        let dpi = ScalingFactor::from_ratio(dpi_raw, USER_DEFAULT_SCREEN_DPI);
         self.dpi.set(dpi);
-        dpi
     }
 
     pub fn update_taskbar_position(&self) {
@@ -151,7 +150,7 @@ impl Position {
     }
 
     #[must_use = "Window position must be applied after recomputing"]
-    pub fn recompute(&self) -> (RECT, ScalingFactor) {
+    pub fn recompute(&self) -> (ScalingFactor, RECT) {
         match self.recompute_fallible() {
             Ok(rect) => {
                 self.rect.set(rect);
@@ -161,7 +160,7 @@ impl Position {
             }
         }
 
-        (self.rect.get(), self.dpi.get())
+        (self.dpi.get(), self.rect.get())
     }
 
     fn recompute_fallible(&self) -> Result<RECT> {

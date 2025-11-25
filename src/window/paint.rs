@@ -88,12 +88,12 @@ impl Paint {
     pub fn render(
         &self,
         window: HWND,
-        rect: RECT,
         dpi: ScalingFactor,
+        rect: RECT,
         metrics: &Metrics,
         is_muted: bool,
     ) {
-        if let Err(e) = self.render_fallible(window, rect, dpi, metrics, is_muted) {
+        if let Err(e) = self.render_fallible(window, dpi, rect, metrics, is_muted) {
             log::error!("Paint failed: {e}");
         }
     }
@@ -103,8 +103,8 @@ impl Paint {
     fn render_fallible(
         &self,
         window: HWND,
-        rect: RECT,
         dpi: ScalingFactor,
+        rect: RECT,
         metrics: &Metrics,
         is_muted: bool,
     ) -> Result<()> {
@@ -162,7 +162,7 @@ impl Paint {
         }
 
         // ...draw the content...
-        self.draw_content(hdc, buffered_paint, rect, dpi, metrics, is_muted)?;
+        self.draw_content(hdc, buffered_paint, dpi, rect, metrics, is_muted)?;
 
         // ...and then write the temporary mem HDC to the window, with alpha blending.
         unsafe {
@@ -192,8 +192,8 @@ impl Paint {
         &self,
         hdc: HDC,
         buffered_paint: isize,
-        rect: RECT,
         dpi: ScalingFactor,
+        rect: RECT,
         metrics: &Metrics,
         is_muted: bool,
     ) -> Result<()> {
