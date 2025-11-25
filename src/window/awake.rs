@@ -50,7 +50,7 @@ impl Awake {
         // SAFETY: No preconditions.
         let res = unsafe { SetThreadExecutionState(new_state) };
         if res == EXECUTION_STATE(0) {
-            return Err(Error::from_win32());
+            return Err(Error::from_thread());
         }
 
         self.currently_kept_awake.set(Some(awake));

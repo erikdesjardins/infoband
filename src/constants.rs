@@ -1,7 +1,7 @@
 use crate::opt::MicrophoneHotkey;
 use crate::utils::Unscaled;
 use windows::Win32::Foundation::{COLORREF, WPARAM};
-use windows::Win32::UI::Input::KeyboardAndMouse::VK_C;
+use windows::Win32::UI::Input::KeyboardAndMouse::VK_OEM_2;
 use windows::Win32::UI::WindowsAndMessaging::{self, TIMERV_DEFAULT_COALESCING};
 
 // Startup parameters
@@ -75,12 +75,6 @@ pub const FIRST_LINE_MIDPOINT_OFFSET_FROM_TOP: Unscaled<i32> = Unscaled::new(15)
 pub const SECOND_LINE_MIDPOINT_OFFSET_FROM_TOP: Unscaled<i32> = Unscaled::new(31);
 pub const LABEL_WIDTH: Unscaled<i32> = Unscaled::new(32);
 pub const RIGHT_COLUMN_WIDTH: Unscaled<i32> = Unscaled::new(*LABEL_WIDTH.as_inner() + 28);
-pub const DEFAULT_OFFSET_FROM_RIGHT: Unscaled<i32> = if cfg!(debug_assertions) {
-    // Shift over when debugging so it's easy to compare with the installed version
-    Unscaled::new(575)
-} else {
-    Unscaled::new(375)
-};
 // Microphone warning will be placed in the horizontal center of the display
 pub const MICROPHONE_WARNING_WIDTH: Unscaled<i32> = Unscaled::new(78); // ~ 48 * 1.618 (golden ratio)
 
@@ -97,7 +91,8 @@ pub const PID_FILE_NAME: &str = "infoband.pid";
 pub const DEFAULT_MIC_HOTKEY: Option<MicrophoneHotkey> = if cfg!(debug_assertions) {
     // Enable by default when debugging so it's easier to test
     Some(MicrophoneHotkey {
-        virtual_key_code: VK_C.0,
+        // Slash / question mark
+        virtual_key_code: VK_OEM_2.0,
         win: true,
         ctrl: false,
         shift: false,
@@ -112,28 +107,30 @@ pub const DEFAULT_KEEP_AWAKE_WHILE_UNLOCKED: bool = cfg!(debug_assertions);
 // User messages
 pub const UM_ENABLE_KEEP_AWAKE: WPARAM = WPARAM(1);
 pub const UM_ENABLE_DEBUG_PAINT: WPARAM = WPARAM(2);
-pub const UM_SET_OFFSET_FROM_RIGHT: WPARAM = WPARAM(3);
-pub const UM_INITIAL_METRICS: WPARAM = WPARAM(4);
-pub const UM_INITIAL_MIC_STATE: WPARAM = WPARAM(5);
-pub const UM_INITIAL_Z_ORDER: WPARAM = WPARAM(6);
-pub const UM_INITIAL_PAINT: WPARAM = WPARAM(7);
-pub const UM_QUEUE_MIC_STATE_CHECK: WPARAM = WPARAM(8);
+pub const UM_INITIAL_METRICS: WPARAM = WPARAM(3);
+pub const UM_INITIAL_MIC_STATE: WPARAM = WPARAM(4);
+pub const UM_INITIAL_RENDER: WPARAM = WPARAM(5);
+pub const UM_QUEUE_TRAY_POSITION_CHECK: WPARAM = WPARAM(6);
+pub const UM_QUEUE_MIC_STATE_CHECK: WPARAM = WPARAM(7);
 
 // Timer ids
 pub const IDT_FETCH_AND_REDRAW_TIMER: WPARAM = WPARAM(1);
-pub const IDT_MIC_STATE_TIMER: WPARAM = WPARAM(2);
+pub const IDT_TRAY_POSITION_TIMER: WPARAM = WPARAM(2);
 pub const IDT_Z_ORDER_TIMER: WPARAM = WPARAM(3);
+pub const IDT_MIC_STATE_TIMER: WPARAM = WPARAM(4);
 
 // Timer intervals
 pub const FETCH_TIMER_MS: u32 = 1000;
 pub const REDRAW_EVERY_N_FETCHES: usize = 5;
-pub const MIC_STATE_TIMER_MS: u32 = 10;
+pub const TRAY_POSITION_TIMER_MS: u32 = 10;
 pub const Z_ORDER_TIMER_MS: u32 = 50;
+pub const MIC_STATE_TIMER_MS: u32 = 10;
 
 // Timer coalescing delays
 pub const FETCH_AND_REDRAW_TIMER_COALESCE: u32 = 1000;
-pub const MIC_STATE_TIMER_COALESCE: u32 = TIMERV_DEFAULT_COALESCING; // usually something short like 32ms
+pub const TRAY_POSITION_TIMER_COALESCE: u32 = TIMERV_DEFAULT_COALESCING; // usually something short like 32ms
 pub const Z_ORDER_TIMER_COALESCE: u32 = TIMERV_DEFAULT_COALESCING; // usually something short like 32ms
+pub const MIC_STATE_TIMER_COALESCE: u32 = TIMERV_DEFAULT_COALESCING; // usually something short like 32ms
 
 // Metrics
 pub const SAMPLE_COUNT: usize = 8;

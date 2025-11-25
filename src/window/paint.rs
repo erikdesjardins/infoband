@@ -5,16 +5,15 @@ use crate::constants::{
 };
 use crate::defer;
 use crate::metrics::Metrics;
-use crate::utils::{RectExt, ScaleBy, ScalingFactor, Unscaled};
+use crate::utils::{RectExt, ScaleBy, ScalingFactor};
 use std::cell::Cell;
 use std::mem;
 use windows::Win32::Foundation::{
-    COLORREF, ERROR_DC_NOT_FOUND, ERROR_EMPTY, ERROR_FILE_NOT_FOUND, HWND, POINT, RECT,
+    COLORREF, ERROR_DC_NOT_FOUND, ERROR_FILE_NOT_FOUND, HWND, POINT, RECT,
 };
 use windows::Win32::Graphics::Gdi::{
     AC_SRC_ALPHA, AC_SRC_OVER, BLENDFUNCTION, CreateSolidBrush, DT_NOCLIP, DT_NOPREFIX,
-    DT_SINGLELINE, DeleteObject, FillRect, GetDC, GetMonitorInfoW, HBRUSH, HDC,
-    MONITOR_DEFAULTTOPRIMARY, MONITORINFO, MonitorFromPoint, ReleaseDC,
+    DT_SINGLELINE, DeleteObject, FillRect, GetDC, HBRUSH, HDC, ReleaseDC,
 };
 use windows::Win32::UI::Controls::{
     BP_PAINTPARAMS, BPBF_TOPDOWNDIB, BPPF_ERASE, BPPF_NOCLIP, BeginBufferedPaint,
@@ -22,7 +21,7 @@ use windows::Win32::UI::Controls::{
     DTT_TEXTCOLOR, DTTOPTS, DrawThemeTextEx, EndBufferedPaint, GetThemeTextExtent, HTHEME,
     TEXT_BODYTEXT,
 };
-use windows::Win32::UI::HiDpi::{GetDpiForWindow, OpenThemeDataForDpi};
+use windows::Win32::UI::HiDpi::OpenThemeDataForDpi;
 use windows::Win32::UI::WindowsAndMessaging::{
     ULW_ALPHA, USER_DEFAULT_SCREEN_DPI, UpdateLayeredWindow,
 };
@@ -33,12 +32,6 @@ pub struct Paint {
     called_buffered_paint_init: (),
     /// Whether to make the window more visible for debugging.
     debug: Cell<bool>,
-    /// Offset from the right edge of the monitor, in unscaled pixels.
-    offset_from_right: Cell<Unscaled<i32>>,
-    /// DPI scaling factor of the window.
-    dpi: Cell<ScalingFactor>,
-    /// Size and position of the window.
-    rect: Cell<RECT>,
     /// Brush for drawing the debug background.
     debug_background_brush: HBRUSH,
     /// Brush for drawing the microphone warning.
@@ -54,46 +47,29 @@ impl Drop for Paint {
         }
 
         if !unsafe { DeleteObject(self.debug_background_brush.into()) }.as_bool() {
-            log::error!("DeleteObject failed: {}", Error::from_win32());
+            log::error!("DeleteObject failed: {}", Error::from_thread());
         }
 
         if !unsafe { DeleteObject(self.microphone_warning_brush.into()) }.as_bool() {
-            log::error!("DeleteObject failed: {}", Error::from_win32());
+            log::error!("DeleteObject failed: {}", Error::from_thread());
         }
     }
 }
 
 impl Paint {
-    pub fn new(window: HWND) -> Result<Self> {
-        let dpi = unsafe { GetDpiForWindow(window) };
-        let dpi = ScalingFactor::from_ratio(dpi, USER_DEFAULT_SCREEN_DPI);
-
-        // Window starts out not displayed, with size and position zero.
-        let rect = RECT {
-            top: 0,
-            bottom: 0,
-            left: 0,
-            right: 0,
-        };
-
-        // Not using DEFAULT_OFFSET_FROM_RIGHT here so issues with sending config are obvious
-        let offset_from_right = Unscaled::new(0);
-
+    pub fn new() -> Result<Self> {
         let debug_background_brush = unsafe { CreateSolidBrush(DEBUG_BACKGROUND_COLOR) };
         if debug_background_brush.is_invalid() {
-            return Err(Error::from_win32());
+            return Err(Error::from_thread());
         }
 
         let microphone_warning_brush = unsafe { CreateSolidBrush(MICROPHONE_WARNING_COLOR) };
         if microphone_warning_brush.is_invalid() {
-            return Err(Error::from_win32());
+            return Err(Error::from_thread());
         }
 
         Ok(Self {
             debug: Cell::new(false),
-            offset_from_right: Cell::new(offset_from_right),
-            dpi: Cell::new(dpi),
-            rect: Cell::new(rect),
             debug_background_brush,
             microphone_warning_brush,
             called_buffered_paint_init: {
@@ -108,78 +84,30 @@ impl Paint {
         self.debug.set(debug);
     }
 
-    pub fn set_offset_from_right(&self, offset_from_right: Unscaled<i32>) {
-        self.offset_from_right.set(offset_from_right);
-    }
-
-    pub fn set_dpi(&self, dpi: u32) -> ScalingFactor {
-        let dpi = ScalingFactor::from_ratio(dpi, USER_DEFAULT_SCREEN_DPI);
-        self.dpi.set(dpi);
-        dpi
-    }
-
-    pub fn update_size_and_position(&self) {
-        match self.compute_size_and_position() {
-            Ok(rect) => {
-                self.rect.set(rect);
-            }
-            Err(e) => {
-                log::warn!("Update window position failed, preserving old position: {e}");
-            }
-        }
-    }
-
-    fn compute_size_and_position(&self) -> Result<RECT> {
-        let dpi = self.dpi.get();
-
-        // Get primary monitor (which always includes the origin)
-        let monitor = unsafe { MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY) };
-
-        // Get size of primary monitor
-        let monitor_info = {
-            let mut monitor_info = MONITORINFO {
-                cbSize: mem::size_of::<MONITORINFO>() as u32,
-                ..Default::default()
-            };
-            // SAFETY: lpmi is valid pointer to MONITORINFO
-            unsafe { GetMonitorInfoW(monitor, &mut monitor_info).ok()? };
-            monitor_info
-        };
-
-        let midpoint = |a, b| a + (b - a) / 2;
-
-        // Height is always the size of the taskbar
-        let top = monitor_info.rcWork.bottom;
-        let bottom = monitor_info.rcMonitor.bottom;
-        // Right edge the specified distance from the right edge of the screen
-        let right = monitor_info.rcMonitor.right - self.offset_from_right.get().scale_by(dpi);
-        // Left edge positioned at the horizontal center of the display, with enough room for the mic warning
-        let left = midpoint(monitor_info.rcMonitor.left, monitor_info.rcMonitor.right)
-            - MICROPHONE_WARNING_WIDTH.scale_by(dpi) / 2;
-
-        if top == bottom || left == right {
-            return Err(Error::new(ERROR_EMPTY.into(), "Draw rectange is empty"));
-        }
-
-        Ok(RECT {
-            top,
-            bottom,
-            left,
-            right,
-        })
-    }
-
     /// Paint the window using the window's device context.
-    pub fn render(&self, window: HWND, metrics: &Metrics, is_muted: bool) {
-        if let Err(e) = self.render_fallible(window, metrics, is_muted) {
+    pub fn render(
+        &self,
+        window: HWND,
+        dpi: ScalingFactor,
+        rect: RECT,
+        metrics: &Metrics,
+        is_muted: bool,
+    ) {
+        if let Err(e) = self.render_fallible(window, dpi, rect, metrics, is_muted) {
             log::error!("Paint failed: {e}");
         }
     }
 
     /// Toplevel paint method, responsible for dealing with paint buffering and updating the window,
     /// but not with drawing any content.
-    fn render_fallible(&self, window: HWND, metrics: &Metrics, is_muted: bool) -> Result<()> {
-        let rect = self.rect.get();
+    fn render_fallible(
+        &self,
+        window: HWND,
+        dpi: ScalingFactor,
+        rect: RECT,
+        metrics: &Metrics,
+        is_muted: bool,
+    ) -> Result<()> {
         let size = rect.size();
         let position = rect.top_left_corner();
 
@@ -222,7 +150,7 @@ impl Paint {
                 )
             };
             if buffered_paint == 0 {
-                return Err(Error::from_win32());
+                return Err(Error::from_thread());
             }
             (hdc, buffered_paint)
         };
@@ -234,7 +162,7 @@ impl Paint {
         }
 
         // ...draw the content...
-        self.draw_content(hdc, buffered_paint, metrics, is_muted)?;
+        self.draw_content(hdc, buffered_paint, dpi, rect, metrics, is_muted)?;
 
         // ...and then write the temporary mem HDC to the window, with alpha blending.
         unsafe {
@@ -264,11 +192,12 @@ impl Paint {
         &self,
         hdc: HDC,
         buffered_paint: isize,
+        dpi: ScalingFactor,
+        rect: RECT,
         metrics: &Metrics,
         is_muted: bool,
     ) -> Result<()> {
-        let dpi = self.dpi.get();
-        let size = self.rect.get().size();
+        let size = rect.size();
 
         let text_style = unsafe {
             OpenThemeDataForDpi(None, w!("TEXTSTYLE"), USER_DEFAULT_SCREEN_DPI.scale_by(dpi))
@@ -294,7 +223,7 @@ impl Paint {
 
         let rect = |r: RECT, color: HBRUSH| {
             if unsafe { FillRect(hdc, &r, color) } == 0 {
-                return Err(Error::from_win32());
+                return Err(Error::from_thread());
             }
             // GDI does not properly support alpha, so we need to set the alpha channel manually afterwards.
             unsafe { BufferedPaintSetAlpha(buffered_paint, Some(&r), 255)? };

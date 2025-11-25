@@ -1,6 +1,7 @@
 use crate::constants::{
     FETCH_AND_REDRAW_TIMER_COALESCE, FETCH_TIMER_MS, IDT_FETCH_AND_REDRAW_TIMER,
-    IDT_MIC_STATE_TIMER, IDT_Z_ORDER_TIMER, MIC_STATE_TIMER_COALESCE, MIC_STATE_TIMER_MS,
+    IDT_MIC_STATE_TIMER, IDT_TRAY_POSITION_TIMER, IDT_Z_ORDER_TIMER, MIC_STATE_TIMER_COALESCE,
+    MIC_STATE_TIMER_MS, TRAY_POSITION_TIMER_COALESCE, TRAY_POSITION_TIMER_MS,
     Z_ORDER_TIMER_COALESCE, Z_ORDER_TIMER_MS,
 };
 use windows::Win32::Foundation::HWND;
@@ -10,16 +11,19 @@ use windows::core::{Error, Result};
 pub struct Timers {
     pub fetch_and_redraw:
         Timer<{ IDT_FETCH_AND_REDRAW_TIMER.0 }, FETCH_TIMER_MS, FETCH_AND_REDRAW_TIMER_COALESCE>,
-    pub mic_state: Timer<{ IDT_MIC_STATE_TIMER.0 }, MIC_STATE_TIMER_MS, MIC_STATE_TIMER_COALESCE>,
+    pub tray_position:
+        Timer<{ IDT_TRAY_POSITION_TIMER.0 }, TRAY_POSITION_TIMER_MS, TRAY_POSITION_TIMER_COALESCE>,
     pub z_order: Timer<{ IDT_Z_ORDER_TIMER.0 }, Z_ORDER_TIMER_MS, Z_ORDER_TIMER_COALESCE>,
+    pub mic_state: Timer<{ IDT_MIC_STATE_TIMER.0 }, MIC_STATE_TIMER_MS, MIC_STATE_TIMER_COALESCE>,
 }
 
 impl Timers {
     pub fn new() -> Self {
         Self {
             fetch_and_redraw: Timer::new(),
-            mic_state: Timer::new(),
+            tray_position: Timer::new(),
             z_order: Timer::new(),
+            mic_state: Timer::new(),
         }
     }
 }
@@ -46,7 +50,7 @@ impl<const ID: usize, const INTERVAL: u32, const COALESCE: u32> Timer<ID, INTERV
         // Note: this timer will be destroyed when the window is destroyed.
         // (And in fact we can't destroy it manually, since the window handle will be invalid at that point.)
         match unsafe { SetCoalescableTimer(Some(window), ID, INTERVAL, None, COALESCE) } {
-            0 => Err(Error::from_win32()),
+            0 => Err(Error::from_thread()),
             _ => Ok(()),
         }
     }

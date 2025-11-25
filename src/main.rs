@@ -61,19 +61,15 @@ fn main() -> Result<()> {
     };
 
     let opt::ConfigFile {
-        offset_from_right,
         mic_hotkey,
         keep_awake_while_unlocked,
     } = config;
 
     log::info!("Started up infoband {}", env!("CARGO_PKG_VERSION"));
 
-    if let Err(e) = window::create_and_run_message_loop(
-        offset_from_right,
-        mic_hotkey,
-        keep_awake_while_unlocked,
-        debug_paint,
-    ) {
+    if let Err(e) =
+        window::create_and_run_message_loop(mic_hotkey, keep_awake_while_unlocked, debug_paint)
+    {
         log::error!("Failed to create and run message loop: {e}");
         return Err(e);
     }
@@ -160,7 +156,7 @@ fn kill_and_write_pid_file(path: &Path) {
             0 => {
                 return log::warn!(
                     "Failed to get process name for pid {pid}: {}",
-                    Error::from_win32()
+                    Error::from_thread()
                 );
             }
             len => len,
@@ -189,7 +185,7 @@ fn kill_and_write_pid_file(path: &Path) {
             ),
             _ => log::warn!(
                 "Failed to wait for existing instance with pid {pid} to exit: {}",
-                Error::from_win32()
+                Error::from_thread()
             ),
         }
     }

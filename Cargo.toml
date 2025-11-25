@@ -1,6 +1,6 @@
 [package]
 name = "infoband"
-version = "1.6.1"
+version = "1.7.0"
 authors = ["Erik Desjardins <erikdesjardins@users.noreply.github.com>"]
 description = "Windows \"DeskBand\" displaying cpu/mem/disk/network info."
 repository = "https://github.com/erikdesjardins/infoband"
@@ -16,7 +16,7 @@ log4rs = { version = "1.0", default-features = false, features = ["console_appen
 log = { version = "0.4", features = ["release_max_level_info"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-windows = { version = "0.61", features = [
+windows = { version = "0.62", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
     "Win32_Media_Audio",
@@ -26,6 +26,7 @@ windows = { version = "0.61", features = [
     "Win32_System_Com_StructuredStorage",
     "Win32_System_DataExchange",
     "Win32_System_LibraryLoader",
+    "Win32_System_Ole",
     "Win32_System_Performance",
     "Win32_System_Power",
     "Win32_System_ProcessStatus",
@@ -33,12 +34,13 @@ windows = { version = "0.61", features = [
     "Win32_System_SystemInformation",
     "Win32_System_Threading",
     "Win32_System_Variant",
+    "Win32_UI_Accessibility",
     "Win32_UI_Controls",
     "Win32_UI_HiDpi",
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_WindowsAndMessaging",
 ] }
-windows-core = { version = "0.61", default-features = false } # Needed only for #[implement(ComInterface)].
+windows-core = { version = "0.62", default-features = false } # Needed only for #[implement(ComInterface)].
 
 [profile.release]
 panic = "abort"
