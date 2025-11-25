@@ -44,7 +44,7 @@ impl ProcHandler for InfoBand {
         let shellhook_message = {
             let res = unsafe { RegisterWindowMessageW(w!("SHELLHOOK")) };
             if res == 0 {
-                return Err(Error::from_win32());
+                return Err(Error::from_thread());
             }
             res
         };

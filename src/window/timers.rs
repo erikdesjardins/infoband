@@ -50,7 +50,7 @@ impl<const ID: usize, const INTERVAL: u32, const COALESCE: u32> Timer<ID, INTERV
         // Note: this timer will be destroyed when the window is destroyed.
         // (And in fact we can't destroy it manually, since the window handle will be invalid at that point.)
         match unsafe { SetCoalescableTimer(Some(window), ID, INTERVAL, None, COALESCE) } {
-            0 => Err(Error::from_win32()),
+            0 => Err(Error::from_thread()),
             _ => Ok(()),
         }
     }

@@ -298,7 +298,7 @@ fn is_window_topmost(handle: HWND) -> Result<bool> {
     let style = {
         let res = unsafe { GetWindowLongW(handle, GWL_EXSTYLE) };
         if res == 0 {
-            return Err(Error::from_win32());
+            return Err(Error::from_thread());
         }
         WINDOW_EX_STYLE(res as u32)
     };

@@ -47,11 +47,11 @@ impl Drop for Paint {
         }
 
         if !unsafe { DeleteObject(self.debug_background_brush.into()) }.as_bool() {
-            log::error!("DeleteObject failed: {}", Error::from_win32());
+            log::error!("DeleteObject failed: {}", Error::from_thread());
         }
 
         if !unsafe { DeleteObject(self.microphone_warning_brush.into()) }.as_bool() {
-            log::error!("DeleteObject failed: {}", Error::from_win32());
+            log::error!("DeleteObject failed: {}", Error::from_thread());
         }
     }
 }
@@ -60,12 +60,12 @@ impl Paint {
     pub fn new() -> Result<Self> {
         let debug_background_brush = unsafe { CreateSolidBrush(DEBUG_BACKGROUND_COLOR) };
         if debug_background_brush.is_invalid() {
-            return Err(Error::from_win32());
+            return Err(Error::from_thread());
         }
 
         let microphone_warning_brush = unsafe { CreateSolidBrush(MICROPHONE_WARNING_COLOR) };
         if microphone_warning_brush.is_invalid() {
-            return Err(Error::from_win32());
+            return Err(Error::from_thread());
         }
 
         Ok(Self {
@@ -150,7 +150,7 @@ impl Paint {
                 )
             };
             if buffered_paint == 0 {
-                return Err(Error::from_win32());
+                return Err(Error::from_thread());
             }
             (hdc, buffered_paint)
         };
@@ -223,7 +223,7 @@ impl Paint {
 
         let rect = |r: RECT, color: HBRUSH| {
             if unsafe { FillRect(hdc, &r, color) } == 0 {
-                return Err(Error::from_win32());
+                return Err(Error::from_thread());
             }
             // GDI does not properly support alpha, so we need to set the alpha channel manually afterwards.
             unsafe { BufferedPaintSetAlpha(buffered_paint, Some(&r), 255)? };
