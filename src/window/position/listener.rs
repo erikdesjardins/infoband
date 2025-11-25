@@ -21,7 +21,7 @@ impl Drop for TrayListenerManager {
             self.automation
                 .RemoveStructureChangedEventHandler(&self.registered_element, &self.listener)
         } {
-            log::error!("Unregistering tray listener failed: {e}");
+            log::warn!("Unregistering tray listener failed: {e}");
         }
     }
 }
@@ -51,10 +51,12 @@ impl TrayListenerManager {
 
     pub fn refresh_element(&mut self, element: IUIAutomationElement) -> Result<()> {
         // Unregister old element
-        unsafe {
+        if let Err(e) = unsafe {
             self.automation
-                .RemoveStructureChangedEventHandler(&self.registered_element, &self.listener)?
-        };
+                .RemoveStructureChangedEventHandler(&self.registered_element, &self.listener)
+        } {
+            log::warn!("Unregistering old tray listener failed: {e}");
+        }
 
         // Register new element
         register_listener(&self.automation, &element, &self.listener)?;

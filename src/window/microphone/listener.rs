@@ -25,7 +25,7 @@ impl Drop for ListenerManager {
     fn drop(&mut self) {
         for (id, endpoint) in &self.registered_endpoints {
             if let Err(e) = unsafe { endpoint.UnregisterControlChangeNotify(&self.listener) } {
-                log::error!("Unregistering listener failed for mic {id}: {e}");
+                log::warn!("Unregistering listener failed for mic {id}: {e}");
             }
         }
     }
